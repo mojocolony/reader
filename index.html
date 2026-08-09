@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f7f5f1">
+  <title>Reader</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+<div class="app-shell">
+  <aside id="sidebar" class="sidebar">
+    <div class="brand-row">
+      <div><div class="eyebrow">READ LATER</div><div class="brand">Reader</div></div>
+      <button id="settingsBtn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+    <button id="addBtn" class="primary-btn full">＋ Add article</button>
+    <label class="search-wrap"><span>⌕</span><input id="searchInput" type="search" placeholder="Search articles"></label>
+    <nav class="nav-section">
+      <button class="nav-item active" data-view="inbox"><span>Inbox</span><span id="inboxCount" class="count"></span></button>
+      <button class="nav-item" data-view="favorites"><span>Favorites</span><span id="favoriteCount" class="count"></span></button>
+      <button class="nav-item" data-view="archive"><span>Archive</span><span id="archiveCount" class="count"></span></button>
+    </nav>
+    <div class="folders-head"><span>Folders</span><button id="newFolderBtn" class="mini-btn" title="New folder">＋</button></div>
+    <div id="folderList" class="folder-list"></div>
+    <div class="sidebar-bottom">
+      <button id="exportBtn" class="text-btn">Export backup</button>
+      <label class="text-btn file-label">Import backup<input id="importInput" type="file" accept="application/json,.json" hidden></label>
+    </div>
+  </aside>
+
+  <section class="article-list-pane">
+    <div class="list-head">
+      <button id="mobileMenuBtn" class="icon-btn mobile-only">☰</button>
+      <div class="list-head-copy"><div id="viewTitle" class="view-title">Inbox</div><div id="viewSubtitle" class="view-subtitle"></div></div>
+      <select id="sortSelect" class="sort-select" aria-label="Sort articles"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="title">A–Z</option><option value="source">Source</option></select>
+    </div>
+    <div id="articleList" class="article-list"></div>
+  </section>
+
+  <main id="readerPane" class="reader-pane">
+    <div id="emptyReader" class="empty-reader"><div class="empty-mark">☷</div><h2>Your reading queue</h2><p>Save an article, then choose it from the list.</p></div>
+    <div id="readerView" class="reader-view" hidden>
+      <header class="reader-topbar">
+        <button id="mobileBackBtn" class="icon-btn mobile-back mobile-only" aria-label="Back to article list">←</button>
+        <div class="reader-meta-compact"><span id="sourceLabel"></span><span id="readingTimeLabel"></span></div>
+        <div class="reader-actions">
+          <button id="favoriteBtn" class="icon-btn" title="Favorite">☆</button>
+          <button id="archiveBtn" class="icon-btn" title="Archive">▣</button>
+          <button id="originalBtn" class="icon-btn" title="Open original">↗</button>
+          <button id="appearanceBtn" class="pill-btn" title="Reading appearance">Aa</button>
+          <button id="modeBtn" class="pill-btn" title="Switch reading mode">Paged</button>
+          <button id="moreBtn" class="icon-btn" title="Article options">⋯</button>
+        </div>
+      </header>
+
+      <div id="scrollReader" class="scroll-reader">
+        <article id="scrollArticle" class="article-content"></article>
+      </div>
+
+      <div id="pagedReader" class="paged-reader" hidden>
+        <div id="pageViewport" class="page-viewport">
+          <article id="pagedArticle" class="article-content paged-flow"></article>
+        </div>
+        <footer class="page-footer">
+          <button id="prevPageBtn" class="page-nav">← Previous</button>
+          <div class="page-progress"><span id="pageLabel">1 / 1</span><div class="progress-track"><div id="progressBar" class="progress-bar"></div></div></div>
+          <button id="nextPageBtn" class="page-nav">Next →</button>
+        </footer>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="backdrop" class="backdrop" hidden></div>
+
+<dialog id="addDialog" class="modal small-modal">
+  <div class="modal-head"><div><div class="modal-title">Add article</div><div class="modal-subtitle">The bookmarklet gives the best results.</div></div><button class="icon-btn" data-close="addDialog">×</button></div>
+  <div class="modal-body">
+    <div class="tip-card"><strong>Save from the web</strong><p>Install the <b>Save to Reader</b> bookmarklet in Settings, then click it while viewing an article.</p></div>
+    <label>Or paste article HTML / text<textarea id="manualContent" rows="9" placeholder="Paste an article here…"></textarea></label>
+    <label>Title<input id="manualTitle" type="text" placeholder="Article title"></label>
+    <label>Source URL<input id="manualUrl" type="url" placeholder="https://…"></label>
+  </div>
+  <div class="modal-actions"><button class="secondary-btn" data-close="addDialog">Cancel</button><button id="saveManualBtn" class="primary-btn">Save article</button></div>
+</dialog>
+
+<dialog id="settingsDialog" class="modal">
+  <div class="modal-head"><div><div class="modal-title">Settings</div><div class="modal-subtitle">Install the clipper and set defaults.</div></div><button class="icon-btn" data-close="settingsDialog">×</button></div>
+  <div class="modal-body">
+    <section class="settings-section">
+      <h3>Save to Reader</h3>
+      <p>Drag this button to your bookmarks bar. On Safari, you can also copy the bookmarklet and paste it into a bookmark's address field.</p>
+      <div class="button-row"><a id="bookmarkletLink" class="primary-btn bookmarklet" href="#">Save to Reader</a><button id="copyBookmarkletBtn" class="secondary-btn">Copy bookmarklet</button></div>
+      <p class="small-copy">The clipper uses Mozilla Readability when the page allows it, with a built-in fallback for stricter sites.</p>
+    </section>
+    <section class="settings-section">
+      <h3>Default reading mode</h3>
+      <select id="defaultModeSelect"><option value="paged">Paged</option><option value="scroll">Scroll</option></select>
+    </section>
+    <section class="settings-section">
+      <h3>Storage</h3><p>Version 1 stores articles privately in this browser. Export a backup if you want an extra copy. Dropbox sync can be added next.</p>
+    </section>
+  </div>
+  <div class="modal-actions"><span></span><button class="secondary-btn" data-close="settingsDialog">Done</button></div>
+</dialog>
+
+<div id="appearancePopover" class="popover" hidden>
+  <label>Font<select id="fontSelect"><option value="Georgia,serif">Georgia</option><option value="Charter,Georgia,serif">Charter</option><option value="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">System</option><option value="Avenir,Helvetica,Arial,sans-serif">Avenir / Helvetica</option><option value="'Times New Roman',Times,serif">Times</option></select></label>
+  <label>Size<select id="fontSizeSelect"></select></label>
+  <label>Line spacing<select id="lineHeightSelect"><option value="1.45">Compact</option><option value="1.6">Comfortable</option><option value="1.75">Relaxed</option><option value="1.9">Airy</option></select></label>
+  <label>Width<select id="widthSelect"><option value="600">Narrow</option><option value="700">Medium</option><option value="820">Wide</option></select></label>
+  <div class="theme-row"><button data-theme="light">Light</button><button data-theme="sepia">Sepia</button><button data-theme="dark">Dark</button><button data-theme="eink">E‑Ink</button></div>
+</div>
+
+<div id="morePopover" class="popover more-popover" hidden>
+  <button id="moveFolderBtn">Move to folder…</button>
+  <button id="deleteArticleBtn" class="danger-text">Delete article</button>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
+<script src="app.js?v=1"></script>
+</body>
+</html>
