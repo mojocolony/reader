@@ -99,13 +99,51 @@ function mergeTombstones(a={},b={}){const out={...a};for(const [id,ts] of Object
 function mergeArticleLists(local,remote,tombs){const map=new Map();for(const a of [...(local||[]),...(remote||[])]){if(!a?.id)continue;const prev=map.get(a.id);if(!prev||articleStamp(a)>=articleStamp(prev))map.set(a.id,a)}return [...map.values()].filter(a=>Number(tombs[a.id]||0)<articleStamp(a)).map(cleanArticleForSync)}
 function newerObject(local,remote){const l=Number(local?.updatedAt||0),r=Number(remote?.updatedAt||0);return r>l?{...remote}:{...local}}
 function localDropboxPayload(){return {version:1,syncedAt:Date.now(),meta:{...meta},settings:{...settings},deletedArticles:{...deletedArticles},articles:articles.map(cleanArticleForSync)}}
+function articleUiStamp(a){
+  if(!a)return '';
+  return JSON.stringify({id:a.id,title:a.title,byline:a.byline,siteName:a.siteName,url:a.url,excerpt:a.excerpt,content:a.content,textContent:a.textContent,archived:!!a.archived,favorite:!!a.favorite,folderId:a.folderId||null,mode:a.mode||null});
+}
+function libraryUiStamp(articleList=articles,metaObj=meta,settingsObj=settings){
+  return JSON.stringify({
+    meta:{folders:metaObj?.folders||[],folderSort:metaObj?.folderSort||'manual'},
+    settings:{mode:settingsObj?.mode,font:settingsObj?.font,size:settingsObj?.size,line:settingsObj?.line,width:settingsObj?.width,theme:settingsObj?.theme},
+    articles:(articleList||[]).map(articleUiStamp)
+  });
+}
 async function applyMergedLibrary(payload){
   suppressDropboxSync=true;
   try{
+    const beforeUi=libraryUiStamp();
+    const beforeSettings=JSON.stringify({mode:settings.mode,font:settings.font,size:settings.size,line:settings.line,width:settings.width,theme:settings.theme});
     meta={folders:[],folderSort:'manual',...(payload.meta||{})};settings={...settings,...(payload.settings||{})};repairSettings();deletedArticles=payload.deletedArticles||{};articles=payload.articles||[];
     await dbReplaceAll(articles);localStorage.setItem(META_KEY,JSON.stringify(meta));localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));localStorage.setItem(DELETED_KEY,JSON.stringify(deletedArticles));
     if(currentId&&!articles.some(a=>a.id===currentId)){currentId=null;$('#readerView').hidden=true;$('#emptyReader').hidden=false}
-    applySettings();renderAll();
+    const afterUi=libraryUiStamp();
+    const afterSettings=JSON.stringify({mode:settings.mode,font:settings.font,size:settings.size,line:settings.line,width:settings.width,theme:settings.theme});
+    // Reading progress and timestamps sync frequently. They must not rebuild the
+    // reader pane, because that causes a visible flash about 1-2 seconds after a
+    // page turn when Dropbox sync finishes. Only rerender when visible library
+    // structure/content or appearance settings actually changed.
+    if(beforeUi!==afterUi){
+      if(beforeSettings!==afterSettings)applySettings();
+      renderAll();
+      const a=currentArticle();
+      if(a&&$('#readerView')&&!$('#readerView').hidden){
+        $('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';
+        $('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;
+        $('#favoriteBtn').textContent=a.favorite?'★':'☆';
+        $('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';
+        $('#originalBtn').disabled=!a.url;
+        // Only replace/repage the article if its visible article data changed.
+        // Folder ordering, counts, etc. can update without disturbing reading.
+        const currentShell=$('#scrollArticle').innerHTML;
+        const nextShell=articleShell(a);
+        if(currentShell!==nextShell){
+          $('#scrollArticle').innerHTML=nextShell;
+          if(!$('#pagedReader').hidden)requestAnimationFrame(()=>paginate().then(()=>restoreProgress(a)));
+        }
+      }
+    }
   }finally{suppressDropboxSync=false}
 }
 function scheduleDropboxSync(){if(suppressDropboxSync||!dbx.connected)return;clearTimeout(dropboxSyncTimer);dropboxSyncTimer=setTimeout(()=>syncDropbox().catch(()=>{}),DROPBOX_SYNC_DELAY)}
@@ -497,7 +535,7 @@ function goPage(delta){currentPage=Math.max(0,Math.min(pageCount-1,currentPage+d
 function restoreProgress(a){if((a.mode||settings.mode)==='paged'){currentPage=Math.round((a.progress||0)*Math.max(0,pageCount-1));showCurrentPage()}else $('#scrollReader').scrollTop=(a.progress||0)*Math.max(0,$('#scrollReader').scrollHeight-$('#scrollReader').clientHeight)}
 function saveScrollProgress(){const a=currentArticle();if(!a||$('#scrollReader').hidden)return;const el=$('#scrollReader'),den=Math.max(1,el.scrollHeight-el.clientHeight);a.progress=Math.min(1,Math.max(0,el.scrollTop/den));a.updatedAt=Date.now();clearTimeout(a._pTimer);a._pTimer=setTimeout(()=>dbPut(a),500)}
 
-function applySettings(){document.documentElement.style.setProperty('--reader-font',settings.font);document.documentElement.style.setProperty('--reader-size',settings.size+'px');document.documentElement.style.setProperty('--reader-line',settings.line);document.documentElement.style.setProperty('--reader-width',settings.width+'px');document.body.classList.remove('theme-light','theme-sepia','theme-dark','theme-eink');document.body.classList.add('theme-'+settings.theme);$('#fontSelect').value=settings.font;$('#fontSizeSelect').value=String(settings.size);$('#lineHeightSelect').value=String(settings.line);$('#widthSelect').value=String(settings.width);$$('.theme-row button').forEach(b=>b.classList.toggle('active',b.dataset.theme===settings.theme));$('#defaultModeSelect').value=settings.mode;requestAnimationFrame(paginate)}
+function applySettings(){document.documentElement.style.setProperty('--reader-font',settings.font);document.documentElement.style.setProperty('--reader-size',settings.size+'px');document.documentElement.style.setProperty('--reader-line',settings.line);document.documentElement.style.setProperty('--reader-width',settings.width+'px');const themeClasses=['theme-light','theme-sepia','theme-dark','theme-eink'];document.body.classList.remove(...themeClasses);document.documentElement.classList.remove(...themeClasses);document.body.classList.add('theme-'+settings.theme);document.documentElement.classList.add('theme-'+settings.theme);const themeColor={light:'#f7f5f1',sepia:'#eee5d5',dark:'#181817',eink:'#ffffff'}[settings.theme]||'#f7f5f1';const themeMeta=document.querySelector('meta[name="theme-color"]');if(themeMeta)themeMeta.setAttribute('content',themeColor);$('#fontSelect').value=settings.font;$('#fontSizeSelect').value=String(settings.size);$('#lineHeightSelect').value=String(settings.line);$('#widthSelect').value=String(settings.width);$$('.theme-row button').forEach(b=>b.classList.toggle('active',b.dataset.theme===settings.theme));$('#defaultModeSelect').value=settings.mode;requestAnimationFrame(paginate)}
 function positionPopover(pop,anchor){const r=anchor.getBoundingClientRect();pop.hidden=false;const w=pop.offsetWidth,h=pop.offsetHeight;pop.style.left=Math.min(innerWidth-w-10,Math.max(10,r.right-w))+'px';pop.style.top=Math.min(innerHeight-h-10,r.bottom+7)+'px'}
 
 function createBookmarklet(){const base=location.href.split('#')[0].split('?')[0];const origin=location.origin;const js=`javascript:(()=>{const R=${JSON.stringify(base)},O=${JSON.stringify(origin)},T=Math.random().toString(36).slice(2)+Date.now().toString(36);let W;const abs=(root)=>{root.querySelectorAll('[src]').forEach(e=>{try{e.src=new URL(e.getAttribute('src'),location.href).href}catch{}});root.querySelectorAll('a[href]').forEach(e=>{try{e.href=new URL(e.getAttribute('href'),location.href).href}catch{}})};const send=(a)=>{W=window.open(R+'#capture='+T,'_blank');const m={type:'reader-capture',token:T,article:{title:a.title||document.title,byline:a.byline||'',siteName:a.siteName||location.hostname,url:location.href,excerpt:a.excerpt||'',content:a.content||'',textContent:a.textContent||''}};let n=0;const i=setInterval(()=>{try{W.postMessage(m,O)}catch{}if(++n>16)clearInterval(i)},350)};const fallback=()=>{const n=(document.querySelector('article')||document.querySelector('main')||document.body).cloneNode(true);n.querySelectorAll('script,style,nav,form,button,aside').forEach(x=>x.remove());abs(n);send({title:document.title,content:n.innerHTML,textContent:n.textContent,siteName:location.hostname})};const run=()=>{try{const d=document.cloneNode(true);abs(d);const a=new Readability(d).parse();a?send(a):fallback()}catch(e){fallback()}};if(window.Readability)return run();const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@mozilla/readability@0.6.0/Readability.js';s.onload=run;s.onerror=fallback;document.documentElement.appendChild(s);setTimeout(()=>{if(!window.Readability&&!W)fallback()},2500)})();`;return js.replace(/\n/g,'')}
