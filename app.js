@@ -2,7 +2,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const DB_NAME='reader-db-v1', DB_VERSION=1, STORE='articles';
 const META_KEY='reader-meta-v1', SETTINGS_KEY='reader-settings-v1';
-let db, articles=[], meta={folders:[]}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, resizeTimer, toastTimer;
+let db, articles=[], meta={folders:[]}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, currentPageStep=756, paginateSeq=0, resizeTimer, toastTimer;
 let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:700,theme:'light'};
 
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
@@ -29,14 +29,61 @@ function renderSidebar(){const inbox=articles.filter(a=>!a.archived).length,fav=
 function renderList(){const arr=filteredArticles();const title=currentFolder?(meta.folders.find(f=>f.id===currentFolder)?.name||'Folder'):{inbox:'Inbox',favorites:'Favorites',archive:'Archive'}[currentView];$('#viewTitle').textContent=title;$('#viewSubtitle').textContent=`${arr.length} article${arr.length===1?'':'s'}`;$('#articleList').innerHTML=arr.length?arr.map(a=>`<div class="article-row ${a.id===currentId?'active':''}" data-id="${a.id}"><div class="article-row-title">${a.favorite?'<span class="fav">★</span> ':''}${esc(a.title)}</div><div class="article-row-excerpt">${esc(a.excerpt||'')}</div><div class="article-row-meta"><span>${esc(a.siteName||hostOf(a.url)||'Saved article')}</span><span>·</span><span>${readingMinutes(a)} min</span><span>·</span><span>${formatAge(a.savedAt)}</span></div></div>`).join(''):`<div class="empty-reader" style="height:auto;padding-top:60px"><p>No articles here yet.</p></div>`;$$('.article-row').forEach(r=>r.onclick=()=>openArticle(r.dataset.id))}
 function formatAge(t){const d=(Date.now()-t)/86400000;if(d<1)return 'Today';if(d<2)return 'Yesterday';if(d<7)return `${Math.floor(d)}d ago`;return new Date(t).toLocaleDateString(undefined,{month:'short',day:'numeric'})}
 
-function articleShell(a){return `<h1 class="reader-title">${esc(a.title)}</h1><div class="reader-deck">${[a.byline,a.siteName].filter(Boolean).map(esc).join(' · ')}${a.excerpt?`<br>${esc(a.excerpt)}`:''}</div>${a.content}`}
+function normalizeReaderHtml(html=''){
+  const t=document.createElement('template');
+  t.innerHTML=sanitize(html);
+  t.content.querySelectorAll('*').forEach(el=>{
+    const style=(el.getAttribute('style')||'').toLowerCase();
+    if(el.hasAttribute('hidden')||el.getAttribute('aria-hidden')==='true'||/display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:[;\s]|$)/.test(style)){
+      el.remove();return;
+    }
+    ['style','class','id','width','height','align','bgcolor','color','face','size'].forEach(a=>el.removeAttribute(a));
+    if(el.tagName==='IMG'){
+      el.removeAttribute('srcset');
+      el.removeAttribute('sizes');
+    }
+  });
+  return t.innerHTML;
+}
+function articleShell(a){return `<h1 class="reader-title">${esc(a.title)}</h1><div class="reader-deck">${[a.byline,a.siteName].filter(Boolean).map(esc).join(' · ')}${a.excerpt?`<br>${esc(a.excerpt)}`:''}</div>${normalizeReaderHtml(a.content)}`}
 async function openArticle(id){const a=articles.find(x=>x.id===id);if(!a)return;currentId=id;currentPage=0;$('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');$('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';$('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;$('#favoriteBtn').textContent=a.favorite?'★':'☆';$('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#originalBtn').disabled=!a.url;$('#scrollArticle').innerHTML=articleShell(a);$('#pagedArticle').innerHTML=articleShell(a);renderList();applySettings();setMode(a.mode||settings.mode,false);requestAnimationFrame(()=>{paginate();restoreProgress(a)})}
 function closeMobileArticle(){if(innerWidth<=680)$('#readerPane').classList.remove('mobile-open')}
 function setMode(mode,save=true){const a=currentArticle();mode=mode==='scroll'?'scroll':'paged';$('#scrollReader').hidden=mode!=='scroll';$('#pagedReader').hidden=mode!=='paged';$('#modeBtn').textContent=mode==='paged'?'Paged':'Scroll';if(a&&save){a.mode=mode;dbPut(a)}if(mode==='paged')requestAnimationFrame(paginate)}
-function pageStep(){return Math.min(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--reader-width'))||700,$('#pageViewport').clientWidth)+56}
-function paginate(){if($('#pagedReader').hidden||!currentArticle())return;const flow=$('#pagedArticle'),vp=$('#pageViewport');flow.classList.add('no-animate');flow.style.transform='translateX(0)';const width=Math.min(settings.width,Math.max(260,vp.clientWidth-36));flow.style.width=width+'px';flow.style.columnWidth=width+'px';document.documentElement.style.setProperty('--reader-width',width+'px');requestAnimationFrame(()=>{const step=width+56;pageCount=Math.max(1,Math.round((flow.scrollWidth+56)/step));currentPage=Math.max(0,Math.min(currentPage,pageCount-1));flow.style.transform=`translateX(${-currentPage*step}px)`;flow.classList.remove('no-animate');updatePageUI()})}
+function pageStep(){return currentPageStep}
+async function paginate(){
+  if($('#pagedReader').hidden||!currentArticle())return;
+  const seq=++paginateSeq,flow=$('#pagedArticle'),vp=$('#pageViewport'),a=currentArticle();
+  const savedProgress=Number.isFinite(a?.progress)?a.progress:(pageCount<=1?0:currentPage/(pageCount-1));
+  flow.classList.add('no-animate','repaginating');
+  flow.style.visibility='hidden';
+  flow.style.transform='none';
+  flow.style.columnWidth='auto';
+  flow.style.width='1px';
+  void flow.offsetHeight;
+  const host=vp.parentElement;
+  const available=(host?.clientWidth||window.innerWidth||vp.clientWidth)-36;
+  const width=Math.min(settings.width,Math.max(220,available));
+  document.documentElement.style.setProperty('--reader-width',width+'px');
+  vp.style.width=width+'px';
+  flow.style.width=width+'px';
+  flow.style.columnWidth=width+'px';
+  flow.style.columnFill='auto';
+  flow.style.columnGap=getComputedStyle(flow).getPropertyValue('--page-gap').trim()||'56px';
+  try{if(document.fonts?.ready)await document.fonts.ready}catch{}
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+  if(seq!==paginateSeq)return;
+  const gap=parseFloat(getComputedStyle(flow).columnGap)||56;
+  currentPageStep=width+gap;
+  pageCount=Math.max(1,Math.ceil((flow.scrollWidth+1)/currentPageStep));
+  currentPage=Math.max(0,Math.min(pageCount-1,Math.round(savedProgress*Math.max(0,pageCount-1))));
+  flow.style.transform=`translateX(${-currentPage*currentPageStep}px)`;
+  flow.style.visibility='';
+  flow.classList.remove('repaginating');
+  requestAnimationFrame(()=>flow.classList.remove('no-animate'));
+  updatePageUI();
+}
 function updatePageUI(){const a=currentArticle();$('#pageLabel').textContent=`${currentPage+1} / ${pageCount}`;$('#prevPageBtn').disabled=currentPage<=0;$('#nextPageBtn').disabled=currentPage>=pageCount-1;const prog=pageCount<=1?1:(currentPage/(pageCount-1));$('#progressBar').style.width=`${prog*100}%`;if(a){a.progress=prog;a.lastPage=currentPage;dbPut(a)}}
-function goPage(delta){currentPage=Math.max(0,Math.min(pageCount-1,currentPage+delta));const width=parseFloat($('#pagedArticle').style.width)||settings.width;$('#pagedArticle').style.transform=`translateX(${-currentPage*(width+56)}px)`;updatePageUI()}
+function goPage(delta){currentPage=Math.max(0,Math.min(pageCount-1,currentPage+delta));$('#pagedArticle').style.transform=`translateX(${-currentPage*currentPageStep}px)`;updatePageUI()}
 function restoreProgress(a){if((a.mode||settings.mode)==='paged'){currentPage=Math.round((a.progress||0)*Math.max(0,pageCount-1));goPage(0)}else $('#scrollReader').scrollTop=(a.progress||0)*Math.max(0,$('#scrollReader').scrollHeight-$('#scrollReader').clientHeight)}
 function saveScrollProgress(){const a=currentArticle();if(!a||$('#scrollReader').hidden)return;const el=$('#scrollReader'),den=Math.max(1,el.scrollHeight-el.clientHeight);a.progress=Math.min(1,Math.max(0,el.scrollTop/den));clearTimeout(a._pTimer);a._pTimer=setTimeout(()=>dbPut(a),500)}
 

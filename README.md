@@ -29,3 +29,7 @@ Version 1 is browser-local. It does not yet sync the article library between dev
 ## v2 fix
 
 - Fixed article selection so the empty reading-queue screen properly hides when an article opens.
+
+
+## v4
+- Mobile paged reading now clips to exactly one centered page width, preventing adjacent columns from showing.
