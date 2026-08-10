@@ -33,3 +33,8 @@ Version 1 is browser-local. It does not yet sync the article library between dev
 
 ## v4
 - Mobile paged reading now clips to exactly one centered page width, preventing adjacent columns from showing.
+
+
+## v5
+- Fixed mobile/tablet paged-reading column width mismatch caused by horizontal padding.
+- Page advance now measures the actual content-box width defensively.

@@ -66,14 +66,21 @@ async function paginate(){
   document.documentElement.style.setProperty('--reader-width',width+'px');
   vp.style.width=width+'px';
   flow.style.width=width+'px';
+  // Paged mode must have no horizontal padding: CSS columns are measured from the content box.
+  // A padding mismatch makes the JS page step wider than the real Safari column width.
+  flow.style.paddingLeft='0px';
+  flow.style.paddingRight='0px';
   flow.style.columnWidth=width+'px';
   flow.style.columnFill='auto';
   flow.style.columnGap=getComputedStyle(flow).getPropertyValue('--page-gap').trim()||'56px';
   try{if(document.fonts?.ready)await document.fonts.ready}catch{}
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   if(seq!==paginateSeq)return;
-  const gap=parseFloat(getComputedStyle(flow).columnGap)||56;
-  currentPageStep=width+gap;
+  const cs=getComputedStyle(flow);
+  const gap=parseFloat(cs.columnGap)||56;
+  const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
+  const actualColumnWidth=Math.max(1,flow.clientWidth-padX);
+  currentPageStep=actualColumnWidth+gap;
   pageCount=Math.max(1,Math.ceil((flow.scrollWidth+1)/currentPageStep));
   currentPage=Math.max(0,Math.min(pageCount-1,Math.round(savedProgress*Math.max(0,pageCount-1))));
   flow.style.transform=`translateX(${-currentPage*currentPageStep}px)`;
