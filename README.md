@@ -24,3 +24,8 @@ After hosting, open **Settings** inside Reader to install the bookmarklet. The b
 ## Current limitation
 
 Version 1 is browser-local. It does not yet sync the article library between devices. Dropbox sync is a natural next addition once the reading/capture experience is approved.
+
+
+## v2 fix
+
+- Fixed article selection so the empty reading-queue screen properly hides when an article opens.
