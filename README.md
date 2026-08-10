@@ -38,3 +38,7 @@ Version 1 is browser-local. It does not yet sync the article library between dev
 ## v5
 - Fixed mobile/tablet paged-reading column width mismatch caused by horizontal padding.
 - Page advance now measures the actual content-box width defensively.
+
+
+## v6
+Paged mode now uses viewport scrolling instead of CSS transforms, avoiding iOS Safari stale-text repaint artifacts when changing font size or typeface.

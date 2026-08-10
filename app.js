@@ -54,28 +54,35 @@ async function paginate(){
   if($('#pagedReader').hidden||!currentArticle())return;
   const seq=++paginateSeq,flow=$('#pagedArticle'),vp=$('#pageViewport'),a=currentArticle();
   const savedProgress=Number.isFinite(a?.progress)?a.progress:(pageCount<=1?0:currentPage/(pageCount-1));
-  flow.classList.add('no-animate','repaginating');
+
+  // iOS Safari can retain stale glyph layers when a transformed multicolumn element
+  // changes font metrics. Rebuild the paged DOM and move the viewport with scrollLeft
+  // instead of transforming the text layer itself.
+  flow.classList.add('repaginating');
   flow.style.visibility='hidden';
   flow.style.transform='none';
+  vp.scrollLeft=0;
+  flow.innerHTML=articleShell(a);
   flow.style.columnWidth='auto';
   flow.style.width='1px';
   void flow.offsetHeight;
+
   const host=vp.parentElement;
   const available=(host?.clientWidth||window.innerWidth||vp.clientWidth)-36;
   const width=Math.min(settings.width,Math.max(220,available));
   document.documentElement.style.setProperty('--reader-width',width+'px');
   vp.style.width=width+'px';
   flow.style.width=width+'px';
-  // Paged mode must have no horizontal padding: CSS columns are measured from the content box.
-  // A padding mismatch makes the JS page step wider than the real Safari column width.
   flow.style.paddingLeft='0px';
   flow.style.paddingRight='0px';
   flow.style.columnWidth=width+'px';
   flow.style.columnFill='auto';
   flow.style.columnGap=getComputedStyle(flow).getPropertyValue('--page-gap').trim()||'56px';
+
   try{if(document.fonts?.ready)await document.fonts.ready}catch{}
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   if(seq!==paginateSeq)return;
+
   const cs=getComputedStyle(flow);
   const gap=parseFloat(cs.columnGap)||56;
   const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
@@ -83,14 +90,13 @@ async function paginate(){
   currentPageStep=actualColumnWidth+gap;
   pageCount=Math.max(1,Math.ceil((flow.scrollWidth+1)/currentPageStep));
   currentPage=Math.max(0,Math.min(pageCount-1,Math.round(savedProgress*Math.max(0,pageCount-1))));
-  flow.style.transform=`translateX(${-currentPage*currentPageStep}px)`;
+  vp.scrollLeft=currentPage*currentPageStep;
   flow.style.visibility='';
   flow.classList.remove('repaginating');
-  requestAnimationFrame(()=>flow.classList.remove('no-animate'));
   updatePageUI();
 }
 function updatePageUI(){const a=currentArticle();$('#pageLabel').textContent=`${currentPage+1} / ${pageCount}`;$('#prevPageBtn').disabled=currentPage<=0;$('#nextPageBtn').disabled=currentPage>=pageCount-1;const prog=pageCount<=1?1:(currentPage/(pageCount-1));$('#progressBar').style.width=`${prog*100}%`;if(a){a.progress=prog;a.lastPage=currentPage;dbPut(a)}}
-function goPage(delta){currentPage=Math.max(0,Math.min(pageCount-1,currentPage+delta));$('#pagedArticle').style.transform=`translateX(${-currentPage*currentPageStep}px)`;updatePageUI()}
+function goPage(delta){currentPage=Math.max(0,Math.min(pageCount-1,currentPage+delta));const vp=$('#pageViewport');vp.scrollLeft=currentPage*currentPageStep;updatePageUI()}
 function restoreProgress(a){if((a.mode||settings.mode)==='paged'){currentPage=Math.round((a.progress||0)*Math.max(0,pageCount-1));goPage(0)}else $('#scrollReader').scrollTop=(a.progress||0)*Math.max(0,$('#scrollReader').scrollHeight-$('#scrollReader').clientHeight)}
 function saveScrollProgress(){const a=currentArticle();if(!a||$('#scrollReader').hidden)return;const el=$('#scrollReader'),den=Math.max(1,el.scrollHeight-el.clientHeight);a.progress=Math.min(1,Math.max(0,el.scrollTop/den));clearTimeout(a._pTimer);a._pTimer=setTimeout(()=>dbPut(a),500)}
 
