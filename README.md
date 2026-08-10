@@ -42,3 +42,8 @@ Version 1 is browser-local. It does not yet sync the article library between dev
 
 ## v6
 Paged mode now uses viewport scrolling instead of CSS transforms, avoiding iOS Safari stale-text repaint artifacts when changing font size or typeface.
+
+
+## Reader v7 pagination
+
+Paged mode uses explicit single-page DOM containers instead of CSS multi-column layout. This avoids WebKit/iOS repaint and reflow glitches when changing fonts or font sizes.

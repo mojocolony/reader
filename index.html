@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=6">
+  <link rel="stylesheet" href="styles.css?v=7">
 </head>
 <body>
 <div class="app-shell">
@@ -63,7 +63,7 @@
 
       <div id="pagedReader" class="paged-reader" hidden>
         <div id="pageViewport" class="page-viewport">
-          <article id="pagedArticle" class="article-content paged-flow"></article>
+          <div id="pageDeck" class="page-deck" aria-live="polite"></div>
         </div>
         <footer class="page-footer">
           <button id="prevPageBtn" class="page-nav">← Previous</button>
@@ -122,6 +122,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

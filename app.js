@@ -2,7 +2,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const DB_NAME='reader-db-v1', DB_VERSION=1, STORE='articles';
 const META_KEY='reader-meta-v1', SETTINGS_KEY='reader-settings-v1';
-let db, articles=[], meta={folders:[]}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, currentPageStep=756, paginateSeq=0, resizeTimer, toastTimer;
+let db, articles=[], meta={folders:[]}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer;
 let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:700,theme:'light'};
 
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
@@ -46,58 +46,155 @@ function normalizeReaderHtml(html=''){
   return t.innerHTML;
 }
 function articleShell(a){return `<h1 class="reader-title">${esc(a.title)}</h1><div class="reader-deck">${[a.byline,a.siteName].filter(Boolean).map(esc).join(' · ')}${a.excerpt?`<br>${esc(a.excerpt)}`:''}</div>${normalizeReaderHtml(a.content)}`}
-async function openArticle(id){const a=articles.find(x=>x.id===id);if(!a)return;currentId=id;currentPage=0;$('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');$('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';$('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;$('#favoriteBtn').textContent=a.favorite?'★':'☆';$('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#originalBtn').disabled=!a.url;$('#scrollArticle').innerHTML=articleShell(a);$('#pagedArticle').innerHTML=articleShell(a);renderList();applySettings();setMode(a.mode||settings.mode,false);requestAnimationFrame(()=>{paginate();restoreProgress(a)})}
+async function openArticle(id){const a=articles.find(x=>x.id===id);if(!a)return;currentId=id;currentPage=0;$('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');$('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';$('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;$('#favoriteBtn').textContent=a.favorite?'★':'☆';$('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#originalBtn').disabled=!a.url;$('#scrollArticle').innerHTML=articleShell(a);renderList();applySettings();setMode(a.mode||settings.mode,false);requestAnimationFrame(()=>{paginate();restoreProgress(a)})}
 function closeMobileArticle(){if(innerWidth<=680)$('#readerPane').classList.remove('mobile-open')}
 function setMode(mode,save=true){const a=currentArticle();mode=mode==='scroll'?'scroll':'paged';$('#scrollReader').hidden=mode!=='scroll';$('#pagedReader').hidden=mode!=='paged';$('#modeBtn').textContent=mode==='paged'?'Paged':'Scroll';if(a&&save){a.mode=mode;dbPut(a)}if(mode==='paged')requestAnimationFrame(paginate)}
-function pageStep(){return currentPageStep}
+function pageHasContent(page){return page && page.childNodes.length>0}
+function makePage(deck){
+  const page=document.createElement('article');
+  page.className='article-content reader-page';
+  deck.appendChild(page);
+  return page;
+}
+function pageFits(page){return page.scrollHeight<=page.clientHeight+1}
+function textNodesOf(el){
+  const out=[],w=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);
+  let n; while((n=w.nextNode())) out.push(n);
+  return out;
+}
+function rangePoint(nodes,index){
+  let left=Math.max(0,index);
+  for(const n of nodes){
+    if(left<=n.nodeValue.length)return [n,left];
+    left-=n.nodeValue.length;
+  }
+  const n=nodes[nodes.length-1];
+  return n?[n,n.nodeValue.length]:[null,0];
+}
+function cloneTextSlice(el,start,end){
+  const clone=el.cloneNode(false),nodes=textNodesOf(el);
+  if(!nodes.length)return clone;
+  const [sn,so]=rangePoint(nodes,start),[en,eo]=rangePoint(nodes,end);
+  if(!sn||!en)return clone;
+  const r=document.createRange();r.setStart(sn,so);r.setEnd(en,eo);
+  clone.appendChild(r.cloneContents());
+  return clone;
+}
+function bestTextEnd(el,start,total,page){
+  let lo=start+1,hi=total,best=start;
+  while(lo<=hi){
+    const mid=Math.floor((lo+hi)/2),candidate=cloneTextSlice(el,start,mid);
+    page.appendChild(candidate);
+    const ok=pageFits(page);
+    candidate.remove();
+    if(ok){best=mid;lo=mid+1}else hi=mid-1;
+  }
+  if(best<=start)return start;
+  if(best<total){
+    const text=el.textContent||'';
+    const floor=Math.max(start+1,best-80);
+    let cut=best;
+    for(let i=best;i>=floor;i--){if(/\s/.test(text[i-1]||'')){cut=i;break}}
+    if(cut>start+8)best=cut;
+  }
+  return best;
+}
+function forceBlock(page,node){
+  const c=node.cloneNode(true);c.classList?.add('reader-forced-block');page.appendChild(c);return c;
+}
+function paginateTextBlock(el,state){
+  const total=(el.textContent||'').length;
+  if(!total){forceBlock(state.page,el);return}
+  let start=0;
+  while(start<total){
+    let end=bestTextEnd(el,start,total,state.page);
+    if(end===start&&pageHasContent(state.page)){
+      state.page=makePage(state.deck);end=bestTextEnd(el,start,total,state.page);
+    }
+    if(end===start){forceBlock(state.page,el);break}
+    state.page.appendChild(cloneTextSlice(el,start,end));
+    start=end;
+    while(start<total&&/\s/.test((el.textContent||'')[start]))start++;
+    if(start<total)state.page=makePage(state.deck);
+  }
+}
+function paginateList(el,state){
+  const tag=el.tagName.toLowerCase();let list=el.cloneNode(false);
+  state.page.appendChild(list);
+  for(const li of [...el.children]){
+    const c=li.cloneNode(true);list.appendChild(c);
+    if(pageFits(state.page))continue;
+    c.remove();
+    if(list.children.length===0)list.remove();
+    state.page=makePage(state.deck);list=el.cloneNode(false);state.page.appendChild(list);
+    list.appendChild(c);
+    if(!pageFits(state.page)){
+      c.remove();
+      const proxy=document.createElement('p');proxy.className='reader-list-fragment';proxy.textContent=(tag==='ol'?'1. ':'• ')+(li.textContent||'');
+      paginateTextBlock(proxy,state);
+      list.remove();
+      list=el.cloneNode(false);
+      if(!state.page.contains(list))state.page.appendChild(list);
+    }
+  }
+  if(!list.children.length)list.remove();
+}
+function paginateNode(node,state){
+  if(node.nodeType===Node.TEXT_NODE){
+    if(!node.textContent.trim())return;
+    const p=document.createElement('p');p.textContent=node.textContent;paginateNode(p,state);return;
+  }
+  if(node.nodeType!==Node.ELEMENT_NODE)return;
+  const tag=node.tagName.toLowerCase();
+  const clone=node.cloneNode(true);state.page.appendChild(clone);
+  if(pageFits(state.page))return;
+  clone.remove();
+  if(pageHasContent(state.page)){
+    state.page=makePage(state.deck);state.page.appendChild(clone);
+    if(pageFits(state.page))return;
+    clone.remove();
+  }
+  if(['div','section','article','main'].includes(tag)&&node.children.length){
+    for(const child of [...node.childNodes])paginateNode(child,state);
+    return;
+  }
+  if(tag==='ul'||tag==='ol'){paginateList(node,state);return}
+  if(['p','blockquote','li','h1','h2','h3','h4','h5','h6'].includes(tag)){
+    paginateTextBlock(node,state);return;
+  }
+  forceBlock(state.page,node);
+}
 async function paginate(){
   if($('#pagedReader').hidden||!currentArticle())return;
-  const seq=++paginateSeq,flow=$('#pagedArticle'),vp=$('#pageViewport'),a=currentArticle();
+  const seq=++paginateSeq,deck=$('#pageDeck'),vp=$('#pageViewport'),a=currentArticle();
   const savedProgress=Number.isFinite(a?.progress)?a.progress:(pageCount<=1?0:currentPage/(pageCount-1));
-
-  // iOS Safari can retain stale glyph layers when a transformed multicolumn element
-  // changes font metrics. Rebuild the paged DOM and move the viewport with scrollLeft
-  // instead of transforming the text layer itself.
-  flow.classList.add('repaginating');
-  flow.style.visibility='hidden';
-  flow.style.transform='none';
-  vp.scrollLeft=0;
-  flow.innerHTML=articleShell(a);
-  flow.style.columnWidth='auto';
-  flow.style.width='1px';
-  void flow.offsetHeight;
-
-  const host=vp.parentElement;
-  const available=(host?.clientWidth||window.innerWidth||vp.clientWidth)-36;
-  const width=Math.min(settings.width,Math.max(220,available));
-  document.documentElement.style.setProperty('--reader-width',width+'px');
-  vp.style.width=width+'px';
-  flow.style.width=width+'px';
-  flow.style.paddingLeft='0px';
-  flow.style.paddingRight='0px';
-  flow.style.columnWidth=width+'px';
-  flow.style.columnFill='auto';
-  flow.style.columnGap=getComputedStyle(flow).getPropertyValue('--page-gap').trim()||'56px';
-
+  deck.classList.add('repaginating');deck.style.visibility='hidden';deck.replaceChildren();
   try{if(document.fonts?.ready)await document.fonts.ready}catch{}
   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   if(seq!==paginateSeq)return;
-
-  const cs=getComputedStyle(flow);
-  const gap=parseFloat(cs.columnGap)||56;
-  const padX=(parseFloat(cs.paddingLeft)||0)+(parseFloat(cs.paddingRight)||0);
-  const actualColumnWidth=Math.max(1,flow.clientWidth-padX);
-  currentPageStep=actualColumnWidth+gap;
-  pageCount=Math.max(1,Math.ceil((flow.scrollWidth+1)/currentPageStep));
+  const host=vp.parentElement;
+  const available=(host?.clientWidth||window.innerWidth||vp.clientWidth)-36;
+  const width=Math.min(settings.width,Math.max(220,available));
+  vp.style.width=width+'px';
+  document.documentElement.style.setProperty('--reader-width',width+'px');
+  const template=document.createElement('template');template.innerHTML=articleShell(a);
+  const state={deck,page:makePage(deck)};
+  for(const node of [...template.content.childNodes])paginateNode(node,state);
+  [...deck.children].forEach(p=>{if(!p.childNodes.length)p.remove()});
+  pageCount=Math.max(1,deck.children.length);
+  if(!deck.children.length)makePage(deck);
   currentPage=Math.max(0,Math.min(pageCount-1,Math.round(savedProgress*Math.max(0,pageCount-1))));
-  vp.scrollLeft=currentPage*currentPageStep;
-  flow.style.visibility='';
-  flow.classList.remove('repaginating');
-  updatePageUI();
+  deck.style.visibility='';deck.classList.remove('repaginating');
+  showCurrentPage();
+  // A late-loading image can change page height. Rebuild once it settles.
+  deck.querySelectorAll('img').forEach(img=>{if(!img.complete)img.addEventListener('load',()=>{clearTimeout(img._rp);img._rp=setTimeout(paginate,60)},{once:true})});
+}
+function showCurrentPage(){
+  const deck=$('#pageDeck');[...deck.children].forEach((p,i)=>p.classList.toggle('is-active',i===currentPage));updatePageUI();
 }
 function updatePageUI(){const a=currentArticle();$('#pageLabel').textContent=`${currentPage+1} / ${pageCount}`;$('#prevPageBtn').disabled=currentPage<=0;$('#nextPageBtn').disabled=currentPage>=pageCount-1;const prog=pageCount<=1?1:(currentPage/(pageCount-1));$('#progressBar').style.width=`${prog*100}%`;if(a){a.progress=prog;a.lastPage=currentPage;dbPut(a)}}
-function goPage(delta){currentPage=Math.max(0,Math.min(pageCount-1,currentPage+delta));const vp=$('#pageViewport');vp.scrollLeft=currentPage*currentPageStep;updatePageUI()}
-function restoreProgress(a){if((a.mode||settings.mode)==='paged'){currentPage=Math.round((a.progress||0)*Math.max(0,pageCount-1));goPage(0)}else $('#scrollReader').scrollTop=(a.progress||0)*Math.max(0,$('#scrollReader').scrollHeight-$('#scrollReader').clientHeight)}
+function goPage(delta){currentPage=Math.max(0,Math.min(pageCount-1,currentPage+delta));showCurrentPage()}
+function restoreProgress(a){if((a.mode||settings.mode)==='paged'){currentPage=Math.round((a.progress||0)*Math.max(0,pageCount-1));showCurrentPage()}else $('#scrollReader').scrollTop=(a.progress||0)*Math.max(0,$('#scrollReader').scrollHeight-$('#scrollReader').clientHeight)}
 function saveScrollProgress(){const a=currentArticle();if(!a||$('#scrollReader').hidden)return;const el=$('#scrollReader'),den=Math.max(1,el.scrollHeight-el.clientHeight);a.progress=Math.min(1,Math.max(0,el.scrollTop/den));clearTimeout(a._pTimer);a._pTimer=setTimeout(()=>dbPut(a),500)}
 
 function applySettings(){document.documentElement.style.setProperty('--reader-font',settings.font);document.documentElement.style.setProperty('--reader-size',settings.size+'px');document.documentElement.style.setProperty('--reader-line',settings.line);document.documentElement.style.setProperty('--reader-width',settings.width+'px');document.body.classList.remove('theme-light','theme-sepia','theme-dark','theme-eink');document.body.classList.add('theme-'+settings.theme);$('#fontSelect').value=settings.font;$('#fontSizeSelect').value=String(settings.size);$('#lineHeightSelect').value=String(settings.line);$('#widthSelect').value=String(settings.width);$$('.theme-row button').forEach(b=>b.classList.toggle('active',b.dataset.theme===settings.theme));$('#defaultModeSelect').value=settings.mode;requestAnimationFrame(paginate)}
