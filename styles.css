@@ -61,3 +61,31 @@ html.theme-dark{background:#181817;color-scheme:dark}html.theme-light,html.theme
 .secondary-btn.compact{padding:6px 9px;font-size:11px}
 .dropbox-buttons{margin-top:10px}
 .dropbox-status{margin-top:9px;color:var(--muted);font-size:12px}
+
+/* Reader v20: keep the desktop reader constrained to the viewport so the pager footer cannot fall below it. */
+@media (min-width:681px){
+  .reader-pane{
+    height:100vh;
+    height:100dvh;
+    min-height:0;
+    overflow:hidden;
+  }
+  .reader-view{
+    height:100%;
+    min-height:0;
+    overflow:hidden;
+  }
+  .paged-reader{
+    height:100%;
+    min-height:0;
+    overflow:hidden;
+  }
+  .page-viewport,.page-deck{
+    min-height:0;
+  }
+  .page-footer{
+    min-height:64px;
+    height:64px;
+    flex:0 0 64px;
+  }
+}
