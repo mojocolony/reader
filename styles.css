@@ -46,3 +46,6 @@ body.theme-dark{--bg:#181817;--panel:#211f1c;--panel-2:#2a2722;--sidebar:#1e1c19
 .folder-row-wrap.folder-drop-before::before,.folder-row-wrap.folder-drop-after::after{content:"";position:absolute;left:2px;right:2px;height:2px;background:var(--accent);border-radius:2px;z-index:6;pointer-events:none}
 .folder-row-wrap.folder-drop-before::before{top:-1px}.folder-row-wrap.folder-drop-after::after{bottom:-1px}
 @media(max-width:680px){.folder-drag-handle{opacity:.65}}
+
+/* Reader v14 safety fallback */
+.reader-page.reader-emergency-page{overflow:auto;visibility:visible;pointer-events:auto;padding-bottom:32px}

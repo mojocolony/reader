@@ -58,3 +58,10 @@ Fixes a reading appearance bug where changing font or font size could save line 
 ## Reader v12
 
 Article cleanup now preserves extracted text even when source sites use hidden/opacity/layout attributes, with a plain-text fallback if cleaned HTML is unexpectedly empty. Folder sorting and drag/drop remain unchanged.
+
+
+## v14 reliability fix
+- Restores the missing folder editor dialog expected by the JavaScript.
+- Prevents optional folder UI from aborting application startup.
+- Uses one canonical article body for Scroll and Paged modes.
+- Adds a plain-text safety fallback for captured articles whose source HTML cannot be rendered reliably.

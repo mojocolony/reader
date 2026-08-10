@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=13">
+  <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
 <div class="app-shell">
@@ -87,6 +87,27 @@
   <div class="modal-actions"><button class="secondary-btn" data-close="addDialog">Cancel</button><button id="saveManualBtn" class="primary-btn">Save article</button></div>
 </dialog>
 
+<dialog id="folderDialog" class="modal small-modal">
+  <div class="modal-head">
+    <div>
+      <div id="folderDialogTitle" class="modal-title">New folder</div>
+      <div class="modal-subtitle">Organize saved articles.</div>
+    </div>
+    <button class="icon-btn" data-close="folderDialog" aria-label="Close">×</button>
+  </div>
+  <div class="modal-body">
+    <label>Folder name<input id="folderNameInput" type="text" autocomplete="off" placeholder="e.g. Longreads"></label>
+    <p class="folder-dialog-help">Deleting a folder moves its articles back to Inbox. It does not delete the articles.</p>
+  </div>
+  <div class="modal-actions">
+    <button id="deleteFolderBtn" class="danger-text" type="button" hidden>Delete folder</button>
+    <div class="button-row">
+      <button class="secondary-btn" data-close="folderDialog" type="button">Cancel</button>
+      <button id="saveFolderBtn" class="primary-btn" type="button">Save folder</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="settingsDialog" class="modal">
   <div class="modal-head"><div><div class="modal-title">Settings</div><div class="modal-subtitle">Install the clipper and set defaults.</div></div><button class="icon-btn" data-close="settingsDialog">×</button></div>
   <div class="modal-body">
@@ -122,6 +143,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

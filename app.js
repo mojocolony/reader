@@ -159,9 +159,25 @@ function normalizeReaderHtml(html=''){
 function textFallbackHtml(text=''){
   const clean=String(text||'').replace(/\r/g,'').trim();
   if(!clean)return '';
-  const blocks=clean.split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);
-  const usable=blocks.length>1?blocks:clean.split(/\n+/).map(x=>x.trim()).filter(Boolean);
-  return usable.map(x=>`<p>${esc(x)}</p>`).join('');
+  let blocks=clean.split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);
+  if(blocks.length<=1)blocks=clean.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  // Readability textContent can occasionally arrive as one enormous line.
+  // Break very long blocks at sentence/word boundaries so pagination has
+  // manageable paragraphs to measure instead of one monolithic node.
+  const out=[];
+  for(const block of blocks.length?blocks:[clean]){
+    let rest=block;
+    while(rest.length>1600){
+      let cut=-1;
+      const window=rest.slice(0,1600);
+      const sentence=[...window.matchAll(/[.!?][”’"')\]]?\s+/g)].pop();
+      if(sentence)cut=sentence.index+sentence[0].length;
+      if(cut<700){const ws=window.lastIndexOf(' ');cut=ws>700?ws:1600}
+      out.push(rest.slice(0,cut).trim());rest=rest.slice(cut).trim();
+    }
+    if(rest)out.push(rest);
+  }
+  return out.map(x=>`<p>${esc(x)}</p>`).join('');
 }
 function articleBodyHtml(a,forceText=false){
   const cleaned=normalizeReaderHtml(a.content||'');
@@ -180,7 +196,21 @@ function articleBodyHtml(a,forceText=false){
   return cleaned;
 }
 function articleShell(a,forceText=false){return `<h1 class="reader-title">${esc(a.title)}</h1><div class="reader-deck">${[a.byline,a.siteName].filter(Boolean).map(esc).join(' · ')}${a.excerpt?`<br>${esc(a.excerpt)}`:''}</div>${articleBodyHtml(a,forceText)}`}
-async function openArticle(id){const a=articles.find(x=>x.id===id);if(!a)return;currentId=id;currentPage=0;$('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');$('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';$('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;$('#favoriteBtn').textContent=a.favorite?'★':'☆';$('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#originalBtn').disabled=!a.url;$('#scrollArticle').innerHTML=articleShell(a);renderList();applySettings();setMode(a.mode||settings.mode,false);requestAnimationFrame(()=>{paginate();restoreProgress(a)})}
+async function openArticle(id){
+  const a=articles.find(x=>x.id===id);if(!a)return;
+  currentId=id;currentPage=0;
+  $('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');
+  $('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';
+  $('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;
+  $('#favoriteBtn').textContent=a.favorite?'★':'☆';
+  $('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#originalBtn').disabled=!a.url;
+  // Scroll view is the canonical rendered article. Paged mode clones this exact
+  // body, so the two modes cannot diverge because of separate cleaning passes.
+  const shell=articleShell(a);
+  $('#scrollArticle').innerHTML=shell;
+  renderList();applySettings();setMode(a.mode||settings.mode,false);
+  requestAnimationFrame(()=>{paginate();restoreProgress(a)});
+}
 function closeMobileArticle(){if(innerWidth<=680)$('#readerPane').classList.remove('mobile-open')}
 function setMode(mode,save=true){const a=currentArticle();mode=mode==='scroll'?'scroll':'paged';$('#scrollReader').hidden=mode!=='scroll';$('#pagedReader').hidden=mode!=='paged';$('#modeBtn').textContent=mode==='paged'?'Paged':'Scroll';if(a&&save){a.mode=mode;dbPut(a)}if(mode==='paged')requestAnimationFrame(paginate)}
 function pageHasContent(page){return page && page.childNodes.length>0}
@@ -319,7 +349,8 @@ async function paginate(){
     [...deck.children].forEach(p=>{if(!p.childNodes.length)p.remove()});
     if(!deck.children.length)makePage(deck);
   };
-  buildPages(articleShell(a));
+  const canonicalHtml=$('#scrollArticle').innerHTML||articleShell(a);
+  buildPages(canonicalHtml);
   // Last-resort integrity check: if pagination somehow loses most of the captured
   // article, rebuild from the saved plain-text copy rather than showing a blank
   // or severely truncated reader view.
@@ -327,7 +358,14 @@ async function paginate(){
   const rendered=[...deck.children].map(p=>p.textContent||'').join(' ').replace(/\s+/g,' ').trim();
   const titleDeckAllowance=(a.title||'').length+(a.excerpt||'').length+(a.byline||'').length+(a.siteName||'').length+120;
   const renderedBody=Math.max(0,rendered.length-titleDeckAllowance);
-  if(expected.length>600&&renderedBody<expected.length*.45)buildPages(articleShell(a,true));
+  if(expected.length>600&&renderedBody<expected.length*.45){
+    buildPages(articleShell(a,true));
+    const forced=[...deck.children].map(p=>p.textContent||'').join(' ').replace(/\s+/g,' ').trim();
+    if(forced.length<Math.min(500,expected.length*.2)){
+      deck.replaceChildren();
+      const p=makePage(deck);p.innerHTML=articleShell(a,true);p.classList.add('reader-emergency-page');
+    }
+  }
   pageCount=Math.max(1,deck.children.length);
   currentPage=Math.max(0,Math.min(pageCount-1,Math.round(savedProgress*Math.max(0,pageCount-1))));
   deck.style.visibility='';deck.classList.remove('repaginating');
@@ -360,7 +398,12 @@ function wire(){
   $$('[data-close]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
   $('#saveManualBtn').onclick=async()=>{const val=$('#manualContent').value.trim();if(!val)return toast('Paste some article text first');const html=/<[a-z][\s\S]*>/i.test(val)?val:val.split(/\n\n+/).map(p=>`<p>${esc(p).replace(/\n/g,'<br>')}</p>`).join('');await saveArticle({title:$('#manualTitle').value||'Untitled',url:$('#manualUrl').value,content:html,textContent:stripHtml(html)});$('#addDialog').close();$('#manualContent').value='';$('#manualTitle').value='';$('#manualUrl').value=''};
   $('#copyBookmarkletBtn').onclick=async()=>{await navigator.clipboard.writeText(createBookmarklet());toast('Bookmarklet copied')};
-  $('#newFolderBtn').onclick=()=>openFolderEditor();$('#folderSortSelect').onchange=()=>{meta.folderSort=$('#folderSortSelect').value;saveMeta();renderSidebar()};$('#saveFolderBtn').onclick=saveFolderEditor;$('#deleteFolderBtn').onclick=deleteFolder;$('#folderNameInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveFolderEditor()}});
+  const newFolderBtn=$('#newFolderBtn'),folderSortSelect=$('#folderSortSelect'),saveFolderBtn=$('#saveFolderBtn'),deleteFolderBtn=$('#deleteFolderBtn'),folderNameInput=$('#folderNameInput');
+  if(newFolderBtn)newFolderBtn.onclick=()=>openFolderEditor();
+  if(folderSortSelect)folderSortSelect.onchange=()=>{meta.folderSort=folderSortSelect.value;saveMeta();renderSidebar()};
+  if(saveFolderBtn)saveFolderBtn.onclick=saveFolderEditor;
+  if(deleteFolderBtn)deleteFolderBtn.onclick=deleteFolder;
+  if(folderNameInput)folderNameInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveFolderEditor()}});
   $('#favoriteBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.favorite=!a.favorite;await dbPut(a);$('#favoriteBtn').textContent=a.favorite?'★':'☆';renderAll()};
   $('#archiveBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.archived=!a.archived;await dbPut(a);renderAll();toast(a.archived?'Archived':'Moved to Inbox')};
   $('#originalBtn').onclick=()=>{const a=currentArticle();if(a?.url)window.open(a.url,'_blank','noopener')};
