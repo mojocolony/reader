@@ -51,3 +51,5 @@ Paged mode uses explicit single-page DOM containers instead of CSS multi-column 
 
 ## Version 8
 Fixes a reading appearance bug where changing font or font size could save line spacing as 0 and make lines overlap. Existing bad settings are repaired automatically.
+
+- Reorder folders manually by dragging, or sort folders A–Z.

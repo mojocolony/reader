@@ -2,7 +2,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 const DB_NAME='reader-db-v1', DB_VERSION=1, STORE='articles';
 const META_KEY='reader-meta-v1', SETTINGS_KEY='reader-settings-v1';
-let db, articles=[], meta={folders:[]}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer, folderEditorId=null, draggedArticleId=null;
+let db, articles=[], meta={folders:[],folderSort:'manual'}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer, folderEditorId=null, draggedArticleId=null, draggedFolderId=null;
 let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:700,theme:'light'};
 
 function repairSettings(){
@@ -20,7 +20,7 @@ function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(
 function esc(s=''){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2200)}
 function saveMeta(){localStorage.setItem(META_KEY,JSON.stringify(meta))} function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function loadLocal(){try{meta={folders:[],...JSON.parse(localStorage.getItem(META_KEY)||'{}')}}catch{};try{settings={...settings,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')}}catch{};if(repairSettings())saveSettings()}
+function loadLocal(){try{meta={folders:[],folderSort:'manual',...JSON.parse(localStorage.getItem(META_KEY)||'{}')}}catch{};if(!['manual','alpha'].includes(meta.folderSort))meta.folderSort='manual';try{settings={...settings,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')}}catch{};if(repairSettings())saveSettings()}
 function openDb(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(STORE))r.result.createObjectStore(STORE,{keyPath:'id'})};r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>rej(r.error)})}
 function dbAll(){return new Promise((res,rej)=>{const r=db.transaction(STORE).objectStore(STORE).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
 function dbPut(a){return new Promise((res,rej)=>{const r=db.transaction(STORE,'readwrite').objectStore(STORE).put(a);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
@@ -37,6 +37,47 @@ async function cacheImages(a){const tmp=document.createElement('div');tmp.innerH
 function filteredArticles(){const q=$('#searchInput').value.trim().toLowerCase();let arr=articles.filter(a=>{if(currentFolder)return a.folderId===currentFolder&&!a.archived;if(currentView==='favorites')return a.favorite&&!a.archived;if(currentView==='archive')return a.archived;return !a.archived&&!a.folderId});if(q)arr=arr.filter(a=>[a.title,a.excerpt,a.siteName,a.byline,a.textContent].some(v=>(v||'').toLowerCase().includes(q)));const sort=$('#sortSelect').value;arr.sort((a,b)=>sort==='oldest'?a.savedAt-b.savedAt:sort==='title'?a.title.localeCompare(b.title):sort==='source'?(a.siteName||'').localeCompare(b.siteName||''):b.savedAt-a.savedAt);return arr}
 function renderAll(){renderSidebar();renderList()}
 function folderById(id){return meta.folders.find(f=>f.id===id)}
+function displayedFolders(){
+  const folders=[...meta.folders];
+  if(meta.folderSort==='alpha')folders.sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:'base'}));
+  return folders;
+}
+function reorderFolder(dragId,targetId,after=false){
+  if(meta.folderSort!=='manual'||!dragId||!targetId||dragId===targetId)return;
+  const from=meta.folders.findIndex(f=>f.id===dragId);if(from<0)return;
+  const [moved]=meta.folders.splice(from,1);
+  let to=meta.folders.findIndex(f=>f.id===targetId);if(to<0){meta.folders.splice(from,0,moved);return}
+  if(after)to+=1;
+  meta.folders.splice(to,0,moved);
+  saveMeta();renderSidebar();toast('Folder order saved');
+}
+function clearFolderDropIndicators(){
+  $$('.folder-drop-before,.folder-drop-after').forEach(x=>x.classList.remove('folder-drop-before','folder-drop-after'));
+}
+function wireFolderSortRow(row){
+  if(!row||meta.folderSort!=='manual')return;
+  const id=row.dataset.folderWrap,handle=row.querySelector('.folder-drag-handle');if(!handle)return;
+  handle.draggable=true;
+  handle.addEventListener('dragstart',e=>{
+    if(draggedArticleId){e.preventDefault();return}
+    draggedFolderId=id;row.classList.add('folder-dragging');
+    if(e.dataTransfer){e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/x-reader-folder',id);e.dataTransfer.setData('text/plain',id)}
+  });
+  row.addEventListener('dragover',e=>{
+    if(!draggedFolderId||draggedFolderId===id)return;
+    e.preventDefault();e.stopPropagation();if(e.dataTransfer)e.dataTransfer.dropEffect='move';
+    clearFolderDropIndicators();
+    const r=row.getBoundingClientRect();row.classList.add(e.clientY<r.top+r.height/2?'folder-drop-before':'folder-drop-after');
+  });
+  row.addEventListener('drop',e=>{
+    if(!draggedFolderId)return;
+    e.preventDefault();e.stopPropagation();
+    const r=row.getBoundingClientRect(),after=e.clientY>=r.top+r.height/2;
+    const dragId=e.dataTransfer?.getData('text/x-reader-folder')||draggedFolderId;
+    clearFolderDropIndicators();reorderFolder(dragId,id,after);
+  });
+  handle.addEventListener('dragend',()=>{draggedFolderId=null;row.classList.remove('folder-dragging');clearFolderDropIndicators()});
+}
 async function moveArticleToFolder(articleId,folderId){
   const a=articles.find(x=>x.id===articleId);if(!a)return;
   a.folderId=folderId||null;
@@ -49,18 +90,20 @@ async function moveArticleToFolder(articleId,folderId){
 }
 function wireDropTarget(el,folderId){
   if(!el)return;
-  el.ondragover=e=>{if(!draggedArticleId)return;e.preventDefault();if(e.dataTransfer)e.dataTransfer.dropEffect='move';el.classList.add('article-drop-target')};
-  el.ondragleave=e=>{if(!el.contains(e.relatedTarget))el.classList.remove('article-drop-target')};
-  el.ondrop=e=>{e.preventDefault();el.classList.remove('article-drop-target');const id=e.dataTransfer?.getData('text/x-reader-article')||e.dataTransfer?.getData('text/plain')||draggedArticleId;if(id)moveArticleToFolder(id,folderId)};
+  el.addEventListener('dragover',e=>{if(!draggedArticleId)return;e.preventDefault();e.stopPropagation();if(e.dataTransfer)e.dataTransfer.dropEffect='move';el.classList.add('article-drop-target')});
+  el.addEventListener('dragleave',e=>{if(!el.contains(e.relatedTarget))el.classList.remove('article-drop-target')});
+  el.addEventListener('drop',e=>{if(!draggedArticleId)return;e.preventDefault();e.stopPropagation();el.classList.remove('article-drop-target');const id=e.dataTransfer?.getData('text/x-reader-article')||e.dataTransfer?.getData('text/plain')||draggedArticleId;if(id)moveArticleToFolder(id,folderId)});
 }
 function renderSidebar(){
   const inbox=articles.filter(a=>!a.archived&&!a.folderId).length,fav=articles.filter(a=>a.favorite&&!a.archived).length,arc=articles.filter(a=>a.archived).length;
   $('#inboxCount').textContent=inbox||'';$('#favoriteCount').textContent=fav||'';$('#archiveCount').textContent=arc||'';
   $$('.nav-item').forEach(b=>b.classList.toggle('active',!currentFolder&&b.dataset.view===currentView));
-  $('#folderList').innerHTML=meta.folders.map(f=>`<div class="folder-row-wrap ${currentFolder===f.id?'active':''}" data-folder-wrap="${f.id}"><button class="folder-item ${currentFolder===f.id?'active':''}" data-folder="${f.id}"><span>${esc(f.name)}</span><span class="count">${articles.filter(a=>a.folderId===f.id&&!a.archived).length||''}</span></button><button class="folder-more" data-folder-more="${f.id}" title="Folder options" aria-label="Folder options">⋯</button></div>`).join('');
+  const folders=displayedFolders();
+  $('#folderSortSelect').value=meta.folderSort;
+  $('#folderList').innerHTML=folders.map(f=>`<div class="folder-row-wrap ${currentFolder===f.id?'active':''}" data-folder-wrap="${f.id}">${meta.folderSort==='manual'?'<span class="folder-drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>':''}<button class="folder-item ${currentFolder===f.id?'active':''}" data-folder="${f.id}"><span>${esc(f.name)}</span><span class="count">${articles.filter(a=>a.folderId===f.id&&!a.archived).length||''}</span></button><button class="folder-more" data-folder-more="${f.id}" title="Folder options" aria-label="Folder options">⋯</button></div>`).join('');
   $$('.folder-item').forEach(b=>b.onclick=()=>{currentFolder=b.dataset.folder;currentView='inbox';renderAll();if(innerWidth<=900){$('#sidebar').classList.remove('open');$('#backdrop').hidden=true}});
   $$('[data-folder-more]').forEach(b=>b.onclick=e=>{e.stopPropagation();openFolderEditor(b.dataset.folder)});
-  $$('.folder-row-wrap').forEach(w=>wireDropTarget(w,w.dataset.folderWrap));
+  $$('.folder-row-wrap').forEach(w=>{wireDropTarget(w,w.dataset.folderWrap);wireFolderSortRow(w)});
   wireDropTarget(document.querySelector('.nav-item[data-view="inbox"]'),null);
 }
 function renderList(){
@@ -69,7 +112,7 @@ function renderList(){
   $('#articleList').innerHTML=arr.length?arr.map(a=>`<div class="article-row ${a.id===currentId?'active':''}" data-id="${a.id}" draggable="true"><div class="article-drag" title="Drag to a folder" aria-hidden="true">⠿</div><div class="article-row-body"><div class="article-row-title">${a.favorite?'<span class="fav">★</span> ':''}${esc(a.title)}</div><div class="article-row-excerpt">${esc(a.excerpt||'')}</div><div class="article-row-meta"><span>${esc(a.siteName||hostOf(a.url)||'Saved article')}</span><span>·</span><span>${readingMinutes(a)} min</span><span>·</span><span>${formatAge(a.savedAt)}</span></div></div></div>`).join(''):`<div class="empty-reader" style="height:auto;padding-top:60px"><p>No articles here yet.</p></div>`;
   $$('.article-row').forEach(r=>{
     r.onclick=()=>openArticle(r.dataset.id);
-    r.addEventListener('dragstart',e=>{draggedArticleId=r.dataset.id;r.classList.add('dragging');if(e.dataTransfer){e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/x-reader-article',draggedArticleId);e.dataTransfer.setData('text/plain',draggedArticleId)}});
+    r.addEventListener('dragstart',e=>{draggedFolderId=null;draggedArticleId=r.dataset.id;r.classList.add('dragging');if(e.dataTransfer){e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/x-reader-article',draggedArticleId);e.dataTransfer.setData('text/plain',draggedArticleId)}});
     r.addEventListener('dragend',()=>{draggedArticleId=null;r.classList.remove('dragging');$$('.article-drop-target').forEach(x=>x.classList.remove('article-drop-target'))});
   });
 }
@@ -281,7 +324,7 @@ function wire(){
   $$('[data-close]').forEach(b=>b.onclick=()=>document.getElementById(b.dataset.close).close());
   $('#saveManualBtn').onclick=async()=>{const val=$('#manualContent').value.trim();if(!val)return toast('Paste some article text first');const html=/<[a-z][\s\S]*>/i.test(val)?val:val.split(/\n\n+/).map(p=>`<p>${esc(p).replace(/\n/g,'<br>')}</p>`).join('');await saveArticle({title:$('#manualTitle').value||'Untitled',url:$('#manualUrl').value,content:html,textContent:stripHtml(html)});$('#addDialog').close();$('#manualContent').value='';$('#manualTitle').value='';$('#manualUrl').value=''};
   $('#copyBookmarkletBtn').onclick=async()=>{await navigator.clipboard.writeText(createBookmarklet());toast('Bookmarklet copied')};
-  $('#newFolderBtn').onclick=()=>openFolderEditor();$('#saveFolderBtn').onclick=saveFolderEditor;$('#deleteFolderBtn').onclick=deleteFolder;$('#folderNameInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveFolderEditor()}});
+  $('#newFolderBtn').onclick=()=>openFolderEditor();$('#folderSortSelect').onchange=()=>{meta.folderSort=$('#folderSortSelect').value;saveMeta();renderSidebar()};$('#saveFolderBtn').onclick=saveFolderEditor;$('#deleteFolderBtn').onclick=deleteFolder;$('#folderNameInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveFolderEditor()}});
   $('#favoriteBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.favorite=!a.favorite;await dbPut(a);$('#favoriteBtn').textContent=a.favorite?'★':'☆';renderAll()};
   $('#archiveBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.archived=!a.archived;await dbPut(a);renderAll();toast(a.archived?'Archived':'Moved to Inbox')};
   $('#originalBtn').onclick=()=>{const a=currentArticle();if(a?.url)window.open(a.url,'_blank','noopener')};

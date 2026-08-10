@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
 <div class="app-shell">
@@ -24,7 +24,7 @@
       <button class="nav-item" data-view="favorites"><span>Favorites</span><span id="favoriteCount" class="count"></span></button>
       <button class="nav-item" data-view="archive"><span>Archive</span><span id="archiveCount" class="count"></span></button>
     </nav>
-    <div class="folders-head"><span>Folders</span><button id="newFolderBtn" class="mini-btn" title="New folder">＋</button></div>
+    <div class="folders-head"><span>Folders</span><div class="folders-head-actions"><select id="folderSortSelect" class="folder-sort-select" aria-label="Sort folders" title="Sort folders"><option value="manual">Manual</option><option value="alpha">A–Z</option></select><button id="newFolderBtn" class="mini-btn" title="New folder">＋</button></div></div>
     <div id="folderList" class="folder-list"></div>
     <div class="sidebar-bottom">
       <button id="exportBtn" class="text-btn">Export backup</button>
@@ -122,6 +122,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
