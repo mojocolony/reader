@@ -53,3 +53,8 @@ Paged mode uses explicit single-page DOM containers instead of CSS multi-column 
 Fixes a reading appearance bug where changing font or font size could save line spacing as 0 and make lines overlap. Existing bad settings are repaired automatically.
 
 - Reorder folders manually by dragging, or sort folders A–Z.
+
+
+## Reader v12
+
+Article cleanup now preserves extracted text even when source sites use hidden/opacity/layout attributes, with a plain-text fallback if cleaned HTML is unexpectedly empty. Folder sorting and drag/drop remain unchanged.
