@@ -8,7 +8,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=14">
+  <link rel="stylesheet" href="styles.css?v=16">
 </head>
 <body>
 <div class="app-shell">
@@ -67,7 +67,7 @@
         </div>
         <footer class="page-footer">
           <button id="prevPageBtn" class="page-nav">← Previous</button>
-          <div class="page-progress"><span id="pageLabel">1 / 1</span><div class="progress-track"><div id="progressBar" class="progress-bar"></div></div></div>
+          <div class="page-progress"><span id="pageLabel">Page 1 of 1</span><div class="progress-track"><div id="progressBar" class="progress-bar"></div></div></div>
           <button id="nextPageBtn" class="page-nav">Next →</button>
         </footer>
       </div>
@@ -122,7 +122,13 @@
       <select id="defaultModeSelect"><option value="paged">Paged</option><option value="scroll">Scroll</option></select>
     </section>
     <section class="settings-section">
-      <h3>Storage</h3><p>Version 1 stores articles privately in this browser. Export a backup if you want an extra copy. Dropbox sync can be added next.</p>
+      <h3>Dropbox Sync</h3>
+      <p>Reader stays local-first, then syncs your articles, folders, favorites, archive state, reading position, and Reader settings through Dropbox.</p>
+      <label class="settings-field">Dropbox App Key<input id="dropboxAppKey" type="text" autocomplete="off" placeholder="Paste App key"></label>
+      <div class="redirect-box"><span class="small-label">Redirect URI</span><code id="dropboxRedirectUri"></code><button id="copyDropboxRedirectBtn" class="secondary-btn compact" type="button">Copy</button></div>
+      <div class="button-row dropbox-buttons"><button id="connectDropboxBtn" class="primary-btn" type="button">Connect Dropbox</button><button id="disconnectDropboxBtn" class="secondary-btn" type="button" hidden>Disconnect</button></div>
+      <div id="dropboxStatus" class="dropbox-status">Not connected</div>
+      <p class="small-copy">Reader uses <code>/reader.json</code> inside the Dropbox App Folder. Article images still come from their original sites; Reader's offline image cache remains local to each device.</p>
     </section>
   </div>
   <div class="modal-actions"><span></span><button class="secondary-btn" data-close="settingsDialog">Done</button></div>
@@ -143,6 +149,6 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
-<script src="app.js?v=14"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

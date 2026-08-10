@@ -21,9 +21,9 @@ Upload the files in this folder to the root of a public GitHub repository and en
 
 After hosting, open **Settings** inside Reader to install the bookmarklet. The bookmarklet automatically points to the URL where this copy of Reader is hosted.
 
-## Current limitation
+## Storage
 
-Version 1 is browser-local. It does not yet sync the article library between devices. Dropbox sync is a natural next addition once the reading/capture experience is approved.
+Reader remains local-first in IndexedDB. Optional Dropbox sync can mirror the article library, folders, favorites/archive state, reading position, and Reader settings between connected browsers. Article-image caching remains device-local.
 
 
 ## v2 fix
@@ -65,3 +65,13 @@ Article cleanup now preserves extracted text even when source sites use hidden/o
 - Prevents optional folder UI from aborting application startup.
 - Uses one canonical article body for Scroll and Paged modes.
 - Adds a plain-text safety fallback for captured articles whose source HTML cannot be rendered reliably.
+
+
+Reader v15: pagination now fills the first page correctly and keeps a bottom safety margin so lines are not clipped.
+
+## Reader v16
+
+- Paged mode now labels the footer as `Page x of y`.
+- Optional Dropbox sync uses OAuth 2 + PKCE and stores the library in `/reader.json` inside the Dropbox App Folder.
+- Dropbox sync includes articles, folders, favorites/archive state, reading progress, and Reader appearance/settings. The app remains local-first.
+- To connect the hosted GitHub Pages build, add its exact URL (for example `https://mojocolony.github.io/reader/`) as an OAuth redirect URI in the Dropbox App Console, then paste the app key in Reader Settings.
