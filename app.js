@@ -5,11 +5,22 @@ const META_KEY='reader-meta-v1', SETTINGS_KEY='reader-settings-v1';
 let db, articles=[], meta={folders:[]}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer;
 let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:700,theme:'light'};
 
+function repairSettings(){
+  let changed=false;
+  const size=Number(settings.size), line=Number(settings.line), width=Number(settings.width);
+  if(!Number.isFinite(size)||size<13||size>28){settings.size=19;changed=true}else settings.size=size;
+  if(!Number.isFinite(line)||line<1.2||line>2.2){settings.line=1.65;changed=true}else settings.line=line;
+  if(!Number.isFinite(width)||width<500||width>1000){settings.width=700;changed=true}else settings.width=width;
+  if(!['paged','scroll'].includes(settings.mode)){settings.mode='paged';changed=true}
+  if(!['light','sepia','dark','eink'].includes(settings.theme)){settings.theme='light';changed=true}
+  return changed;
+}
+
 function uid(){return crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)}
 function esc(s=''){return s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2200)}
 function saveMeta(){localStorage.setItem(META_KEY,JSON.stringify(meta))} function saveSettings(){localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings))}
-function loadLocal(){try{meta={folders:[],...JSON.parse(localStorage.getItem(META_KEY)||'{}')}}catch{};try{settings={...settings,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')}}catch{}}
+function loadLocal(){try{meta={folders:[],...JSON.parse(localStorage.getItem(META_KEY)||'{}')}}catch{};try{settings={...settings,...JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}')}}catch{};if(repairSettings())saveSettings()}
 function openDb(){return new Promise((res,rej)=>{const r=indexedDB.open(DB_NAME,DB_VERSION);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains(STORE))r.result.createObjectStore(STORE,{keyPath:'id'})};r.onsuccess=()=>{db=r.result;res()};r.onerror=()=>rej(r.error)})}
 function dbAll(){return new Promise((res,rej)=>{const r=db.transaction(STORE).objectStore(STORE).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)})}
 function dbPut(a){return new Promise((res,rej)=>{const r=db.transaction(STORE,'readwrite').objectStore(STORE).put(a);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
@@ -225,7 +236,7 @@ function wire(){
   $('#scrollReader').onscroll=saveScrollProgress;
   $('#appearanceBtn').onclick=e=>positionPopover($('#appearancePopover'),e.currentTarget);$('#moreBtn').onclick=e=>positionPopover($('#morePopover'),e.currentTarget);
   document.addEventListener('pointerdown',e=>{for(const id of ['appearancePopover','morePopover']){const p=document.getElementById(id);if(!p.hidden&&!p.contains(e.target)&&!['appearanceBtn','moreBtn'].includes(e.target.id))p.hidden=true}});
-  const updateAppearance=()=>{settings.font=$('#fontSelect').value;settings.size=+$('#fontSizeSelect').value;settings.line=+$('#lineHeightSelect').value;settings.width=+$('#widthSelect').value;saveSettings();applySettings()};$('#fontSelect').onchange=updateAppearance;$('#fontSizeSelect').onchange=updateAppearance;$('#lineHeightSelect').onchange=updateAppearance;$('#widthSelect').onchange=updateAppearance;
+  const updateAppearance=()=>{const size=Number($('#fontSizeSelect').value),line=Number($('#lineHeightSelect').value),width=Number($('#widthSelect').value);settings.font=$('#fontSelect').value||settings.font;if(Number.isFinite(size)&&size>=13&&size<=28)settings.size=size;if(Number.isFinite(line)&&line>=1.2&&line<=2.2)settings.line=line;if(Number.isFinite(width)&&width>=500&&width<=1000)settings.width=width;repairSettings();saveSettings();applySettings()};$('#fontSelect').onchange=updateAppearance;$('#fontSizeSelect').onchange=updateAppearance;$('#lineHeightSelect').onchange=updateAppearance;$('#widthSelect').onchange=updateAppearance;
   $$('.theme-row button').forEach(b=>b.onclick=()=>{settings.theme=b.dataset.theme;saveSettings();applySettings()});$('#defaultModeSelect').onchange=()=>{settings.mode=$('#defaultModeSelect').value;saveSettings()};
   $('#moveFolderBtn').onclick=async()=>{const a=currentArticle();if(!a)return;const choices=['Inbox',...meta.folders.map(f=>f.name)];const ans=prompt('Move to folder:\n'+choices.map((x,i)=>`${i}: ${x}`).join('\n'),'0');if(ans===null)return;const n=+ans;a.folderId=n>0&&meta.folders[n-1]?meta.folders[n-1].id:null;await dbPut(a);$('#morePopover').hidden=true;renderAll();toast('Moved')};
   $('#deleteArticleBtn').onclick=async()=>{const a=currentArticle();if(!a||!confirm(`Delete “${a.title}”?`))return;await dbDelete(a.id);articles=articles.filter(x=>x.id!==a.id);currentId=null;$('#readerView').hidden=true;$('#emptyReader').hidden=false;$('#morePopover').hidden=true;renderAll();closeMobileArticle()};

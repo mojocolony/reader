@@ -47,3 +47,7 @@ Paged mode now uses viewport scrolling instead of CSS transforms, avoiding iOS S
 ## Reader v7 pagination
 
 Paged mode uses explicit single-page DOM containers instead of CSS multi-column layout. This avoids WebKit/iOS repaint and reflow glitches when changing fonts or font sizes.
+
+
+## Version 8
+Fixes a reading appearance bug where changing font or font size could save line spacing as 0 and make lines overlap. Existing bad settings are repaired automatically.
