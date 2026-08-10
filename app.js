@@ -163,17 +163,23 @@ function textFallbackHtml(text=''){
   const usable=blocks.length>1?blocks:clean.split(/\n+/).map(x=>x.trim()).filter(Boolean);
   return usable.map(x=>`<p>${esc(x)}</p>`).join('');
 }
-function articleBodyHtml(a){
+function articleBodyHtml(a,forceText=false){
   const cleaned=normalizeReaderHtml(a.content||'');
   const cleanedText=stripHtml(cleaned).replace(/\s+/g,' ').trim();
-  const savedText=String(a.textContent||'').replace(/\s+/g,' ').trim();
-  // If source styling/markup produced a suspiciously empty body, keep the
-  // article readable by falling back to the plain text captured alongside it.
-  if(cleanedText.length>=Math.min(180,Math.max(40,savedText.length*.08)))return cleaned;
-  if(savedText.length>cleanedText.length+80)return textFallbackHtml(a.textContent);
-  return cleaned||textFallbackHtml(a.textContent);
+  const savedRaw=String(a.textContent||'').trim();
+  const savedText=savedRaw.replace(/\s+/g,' ').trim();
+  if(forceText)return textFallbackHtml(savedRaw)||cleaned;
+  if(!savedText)return cleaned;
+  // Validate coverage, not merely the presence of a small amount of text.
+  // A long captured article should not be considered healthy when only a
+  // short wrapper/caption survives HTML normalization.
+  const coverage=savedText.length?cleanedText.length/savedText.length:1;
+  const materiallyShort=cleanedText.length<Math.max(120,Math.min(900,savedText.length*.35));
+  const poorCoverage=savedText.length>600&&coverage<.55;
+  if(!cleanedText||materiallyShort||poorCoverage)return textFallbackHtml(savedRaw)||cleaned;
+  return cleaned;
 }
-function articleShell(a){return `<h1 class="reader-title">${esc(a.title)}</h1><div class="reader-deck">${[a.byline,a.siteName].filter(Boolean).map(esc).join(' · ')}${a.excerpt?`<br>${esc(a.excerpt)}`:''}</div>${articleBodyHtml(a)}`}
+function articleShell(a,forceText=false){return `<h1 class="reader-title">${esc(a.title)}</h1><div class="reader-deck">${[a.byline,a.siteName].filter(Boolean).map(esc).join(' · ')}${a.excerpt?`<br>${esc(a.excerpt)}`:''}</div>${articleBodyHtml(a,forceText)}`}
 async function openArticle(id){const a=articles.find(x=>x.id===id);if(!a)return;currentId=id;currentPage=0;$('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');$('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';$('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;$('#favoriteBtn').textContent=a.favorite?'★':'☆';$('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#originalBtn').disabled=!a.url;$('#scrollArticle').innerHTML=articleShell(a);renderList();applySettings();setMode(a.mode||settings.mode,false);requestAnimationFrame(()=>{paginate();restoreProgress(a)})}
 function closeMobileArticle(){if(innerWidth<=680)$('#readerPane').classList.remove('mobile-open')}
 function setMode(mode,save=true){const a=currentArticle();mode=mode==='scroll'?'scroll':'paged';$('#scrollReader').hidden=mode!=='scroll';$('#pagedReader').hidden=mode!=='paged';$('#modeBtn').textContent=mode==='paged'?'Paged':'Scroll';if(a&&save){a.mode=mode;dbPut(a)}if(mode==='paged')requestAnimationFrame(paginate)}
@@ -305,12 +311,24 @@ async function paginate(){
   const width=Math.min(settings.width,Math.max(220,available));
   vp.style.width=width+'px';
   document.documentElement.style.setProperty('--reader-width',width+'px');
-  const template=document.createElement('template');template.innerHTML=articleShell(a);
-  const state={deck,page:makePage(deck)};
-  for(const node of [...template.content.childNodes])paginateNode(node,state);
-  [...deck.children].forEach(p=>{if(!p.childNodes.length)p.remove()});
+  const buildPages=(html)=>{
+    deck.replaceChildren();
+    const template=document.createElement('template');template.innerHTML=html;
+    const state={deck,page:makePage(deck)};
+    for(const node of [...template.content.childNodes])paginateNode(node,state);
+    [...deck.children].forEach(p=>{if(!p.childNodes.length)p.remove()});
+    if(!deck.children.length)makePage(deck);
+  };
+  buildPages(articleShell(a));
+  // Last-resort integrity check: if pagination somehow loses most of the captured
+  // article, rebuild from the saved plain-text copy rather than showing a blank
+  // or severely truncated reader view.
+  const expected=String(a.textContent||'').replace(/\s+/g,' ').trim();
+  const rendered=[...deck.children].map(p=>p.textContent||'').join(' ').replace(/\s+/g,' ').trim();
+  const titleDeckAllowance=(a.title||'').length+(a.excerpt||'').length+(a.byline||'').length+(a.siteName||'').length+120;
+  const renderedBody=Math.max(0,rendered.length-titleDeckAllowance);
+  if(expected.length>600&&renderedBody<expected.length*.45)buildPages(articleShell(a,true));
   pageCount=Math.max(1,deck.children.length);
-  if(!deck.children.length)makePage(deck);
   currentPage=Math.max(0,Math.min(pageCount-1,Math.round(savedProgress*Math.max(0,pageCount-1))));
   deck.style.visibility='';deck.classList.remove('repaginating');
   showCurrentPage();
