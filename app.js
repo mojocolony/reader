@@ -3,7 +3,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 const DB_NAME='reader-db-v1', DB_VERSION=1, STORE='articles';
 const META_KEY='reader-meta-v1', SETTINGS_KEY='reader-settings-v1', DELETED_KEY='reader-deleted-v1';
 const DROPBOX_KEY='reader.dropbox.v1', DROPBOX_PKCE_KEY='reader.dropbox.pkce.v1', DROPBOX_FILE='/reader.json', DROPBOX_SYNC_DELAY=1400;
-let db, articles=[], meta={folders:[],folderSort:'manual'}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer, folderEditorId=null, draggedArticleId=null, draggedFolderId=null;
+let db, articles=[], meta={folders:[],folderSort:'manual'}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer, folderEditorId=null, draggedArticleId=null, draggedFolderId=null, lastViewportWidth=window.innerWidth, lastViewportHeight=window.innerHeight;
 let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:700,theme:'light'};
 let deletedArticles={}, dbx=loadDropboxState(), dropboxSyncTimer=null, dropboxSyncing=false, dropboxSyncAgain=false, suppressDropboxSync=false;
 
@@ -595,7 +595,20 @@ function wire(){
   $('#exportBtn').onclick=()=>{const blob=new Blob([JSON.stringify({version:1,exportedAt:Date.now(),meta,settings,articles},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`reader-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(a.href)};
   $('#importInput').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(!Array.isArray(j.articles))throw 0;if(confirm(`Import ${j.articles.length} articles? Existing articles with the same IDs will be replaced.`)){for(const a of j.articles){if(a?.id)delete deletedArticles[a.id];await dbPut(a)}saveDeleted();if(j.meta){meta=j.meta;saveMeta()}if(j.settings){settings={...settings,...j.settings};saveSettings()}articles=await dbAll();applySettings();renderAll();toast('Backup imported')}}catch{toast('Could not read backup')}e.target.value=''};
   $('#mobileMenuBtn').onclick=()=>{$('#sidebar').classList.add('open');$('#backdrop').hidden=false};$('#backdrop').onclick=()=>{$('#sidebar').classList.remove('open');$('#backdrop').hidden=true};$('#mobileBackBtn').onclick=closeMobileArticle;
-  window.addEventListener('resize',()=>{clearTimeout(resizeTimer);resizeTimer=setTimeout(paginate,120)});
+  window.addEventListener('resize',()=>{
+    const w=window.innerWidth,h=window.innerHeight;
+    const widthChanged=Math.abs(w-lastViewportWidth)>6;
+    const heightChanged=Math.abs(h-lastViewportHeight)>24;
+    lastViewportWidth=w;lastViewportHeight=h;
+    // iOS Safari repeatedly changes the viewport height while its browser chrome
+    // expands/collapses. Repaginating on those height-only resizes makes the
+    // current page visibly blink. On phone-sized layouts, repaginate only when
+    // width changes (rotation / real layout change). Desktop still responds to
+    // meaningful width or height resizing.
+    if(w<=680&&!widthChanged)return;
+    if(w>680&&!widthChanged&&!heightChanged)return;
+    clearTimeout(resizeTimer);resizeTimer=setTimeout(paginate,140);
+  });
 }
 init().catch(e=>{console.error(e);toast('Reader could not start')});
 
