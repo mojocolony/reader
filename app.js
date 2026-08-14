@@ -3,9 +3,11 @@ const $$ = s => [...document.querySelectorAll(s)];
 const DB_NAME='reader-db-v1', DB_VERSION=1, STORE='articles';
 const META_KEY='reader-meta-v1', SETTINGS_KEY='reader-settings-v1', DELETED_KEY='reader-deleted-v1';
 const DROPBOX_KEY='reader.dropbox.v1', DROPBOX_PKCE_KEY='reader.dropbox.pkce.v1', DROPBOX_FILE='/reader.json', DROPBOX_SYNC_DELAY=1400;
+const LAYOUT_KEY='reader-layout-widths-v1', LAYOUT_DEFAULTS={sidebar:230,list:310}, LAYOUT_LIMITS={sidebarMin:180,sidebarMax:380,listMin:240,listMax:520,readerMin:420};
 let db, articles=[], meta={folders:[],folderSort:'manual'}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer, folderEditorId=null, draggedArticleId=null, draggedFolderId=null, lastViewportWidth=window.innerWidth, lastViewportHeight=window.innerHeight;
 let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:700,theme:'light'};
 let deletedArticles={}, dbx=loadDropboxState(), dropboxSyncTimer=null, dropboxSyncing=false, dropboxSyncAgain=false, suppressDropboxSync=false;
+let layoutWidths=loadLayoutWidths(), imageSettleSeq=0;
 
 function repairSettings(){
   let changed=false;
@@ -35,6 +37,16 @@ function sanitize(html){if(window.DOMPurify)return DOMPurify.sanitize(html,{USE_
 function readingMinutes(a){return Math.max(1,Math.round((a.wordCount||stripHtml(a.content).split(/\s+/).length)/225))}
 function hostOf(url){try{return new URL(url).hostname.replace(/^www\./,'')}catch{return ''}}
 function currentArticle(){return articles.find(a=>a.id===currentId)}
+
+function refreshIcons(){if(window.lucide)window.lucide.createIcons()}
+function clampNumber(value,min,max){return Math.min(max,Math.max(min,value))}
+function loadLayoutWidths(){try{const raw=JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}');return {sidebar:Number.isFinite(Number(raw.sidebar))?Number(raw.sidebar):LAYOUT_DEFAULTS.sidebar,list:Number.isFinite(Number(raw.list))?Number(raw.list):LAYOUT_DEFAULTS.list}}catch{return {...LAYOUT_DEFAULTS}}}
+function saveLayoutWidths(){try{localStorage.setItem(LAYOUT_KEY,JSON.stringify(layoutWidths))}catch{}}
+function desktopLayoutActive(){return window.matchMedia('(min-width: 901px)').matches}
+function clampLayoutToViewport(){const shell=document.querySelector('.app-shell');if(!shell)return;const width=shell.getBoundingClientRect().width||innerWidth;layoutWidths.sidebar=clampNumber(layoutWidths.sidebar,LAYOUT_LIMITS.sidebarMin,Math.min(LAYOUT_LIMITS.sidebarMax,Math.max(LAYOUT_LIMITS.sidebarMin,width-LAYOUT_LIMITS.listMin-LAYOUT_LIMITS.readerMin)));layoutWidths.list=clampNumber(layoutWidths.list,LAYOUT_LIMITS.listMin,Math.min(LAYOUT_LIMITS.listMax,Math.max(LAYOUT_LIMITS.listMin,width-layoutWidths.sidebar-LAYOUT_LIMITS.readerMin)))}
+function applyLayoutWidths(){const root=document.documentElement;if(!desktopLayoutActive()){root.style.removeProperty('--sidebar-width');root.style.removeProperty('--list-width');return}clampLayoutToViewport();root.style.setProperty('--sidebar-width',`${Math.round(layoutWidths.sidebar)}px`);root.style.setProperty('--list-width',`${Math.round(layoutWidths.list)}px`)}
+function setupColumnResizers(){const shell=document.querySelector('.app-shell'),sidebarResizer=$('#sidebarResizer'),listResizer=$('#listResizer');if(!shell||!sidebarResizer||!listResizer)return;const startDrag=(kind,event)=>{if(!desktopLayoutActive()||event.button!==0)return;event.preventDefault();const resizer=kind==='sidebar'?sidebarResizer:listResizer;resizer.classList.add('active');document.body.classList.add('resizing-columns');try{resizer.setPointerCapture(event.pointerId)}catch{}const move=e=>{const rect=shell.getBoundingClientRect(),x=e.clientX-rect.left;if(kind==='sidebar'){const maxSidebar=Math.min(LAYOUT_LIMITS.sidebarMax,rect.width-layoutWidths.list-LAYOUT_LIMITS.readerMin);layoutWidths.sidebar=clampNumber(x,LAYOUT_LIMITS.sidebarMin,Math.max(LAYOUT_LIMITS.sidebarMin,maxSidebar))}else{const maxList=Math.min(LAYOUT_LIMITS.listMax,rect.width-layoutWidths.sidebar-LAYOUT_LIMITS.readerMin);layoutWidths.list=clampNumber(x-layoutWidths.sidebar,LAYOUT_LIMITS.listMin,Math.max(LAYOUT_LIMITS.listMin,maxList))}applyLayoutWidths()};const end=e=>{move(e);resizer.classList.remove('active');document.body.classList.remove('resizing-columns');resizer.removeEventListener('pointermove',move);resizer.removeEventListener('pointerup',end);resizer.removeEventListener('pointercancel',end);try{resizer.releasePointerCapture(e.pointerId)}catch{}saveLayoutWidths();clearTimeout(resizeTimer);resizeTimer=setTimeout(paginate,80)};resizer.addEventListener('pointermove',move);resizer.addEventListener('pointerup',end);resizer.addEventListener('pointercancel',end)};sidebarResizer.addEventListener('pointerdown',e=>startDrag('sidebar',e));listResizer.addEventListener('pointerdown',e=>startDrag('list',e));sidebarResizer.addEventListener('dblclick',()=>{layoutWidths.sidebar=LAYOUT_DEFAULTS.sidebar;applyLayoutWidths();saveLayoutWidths();paginate()});listResizer.addEventListener('dblclick',()=>{layoutWidths.list=LAYOUT_DEFAULTS.list;applyLayoutWidths();saveLayoutWidths();paginate()});applyLayoutWidths()}
+async function settleCanonicalImages(articleId){const token=++imageSettleSeq,imgs=[...$('#scrollArticle').querySelectorAll('img')].filter(img=>!img.complete);if(!imgs.length)return;const wait=img=>new Promise(resolve=>{const done=()=>resolve();img.addEventListener('load',done,{once:true});img.addEventListener('error',done,{once:true})});await Promise.race([Promise.all(imgs.map(wait)),new Promise(r=>setTimeout(r,1800))]);if(token!==imageSettleSeq||currentId!==articleId||$('#pagedReader').hidden)return;await paginate()}
 
 
 function loadDropboxState(){try{const v=JSON.parse(localStorage.getItem(DROPBOX_KEY)||'{}');return v&&typeof v==='object'?{connected:false,...v}:{connected:false}}catch{return {connected:false}}}
@@ -131,8 +143,8 @@ async function applyMergedLibrary(payload){
       if(a&&$('#readerView')&&!$('#readerView').hidden){
         $('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';
         $('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;
-        $('#favoriteBtn').textContent=a.favorite?'★':'☆';
-        $('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';
+        $('#favoriteBtn').classList.toggle('is-favorite',!!a.favorite);$('#favoriteBtn').title=a.favorite?'Remove favorite':'Favorite';$('#favoriteBtn').setAttribute('aria-label',$('#favoriteBtn').title);
+        $('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#archiveBtn').setAttribute('aria-label',$('#archiveBtn').title);$('#archiveBtn').innerHTML=`<i data-lucide="${a.archived?'archive-restore':'archive'}"></i>`;refreshIcons();
         $('#originalBtn').disabled=!a.url;
         // Only replace/repage the article if its visible article data changed.
         // Folder ordering, counts, etc. can update without disturbing reading.
@@ -227,16 +239,18 @@ function renderSidebar(){
   $$('.nav-item').forEach(b=>b.classList.toggle('active',!currentFolder&&b.dataset.view===currentView));
   const folders=displayedFolders();
   $('#folderSortSelect').value=meta.folderSort;
-  $('#folderList').innerHTML=folders.map(f=>`<div class="folder-row-wrap ${currentFolder===f.id?'active':''}" data-folder-wrap="${f.id}">${meta.folderSort==='manual'?'<span class="folder-drag-handle" title="Drag to reorder" aria-hidden="true">⠿</span>':''}<button class="folder-item ${currentFolder===f.id?'active':''}" data-folder="${f.id}"><span>${esc(f.name)}</span><span class="count">${articles.filter(a=>a.folderId===f.id&&!a.archived).length||''}</span></button><button class="folder-more" data-folder-more="${f.id}" title="Folder options" aria-label="Folder options">⋯</button></div>`).join('');
+  $('#folderList').innerHTML=folders.map(f=>`<div class="folder-row-wrap ${currentFolder===f.id?'active':''}" data-folder-wrap="${f.id}">${meta.folderSort==='manual'?'<span class="folder-drag-handle" title="Drag to reorder" aria-hidden="true"><i data-lucide="grip-vertical"></i></span>':''}<button class="folder-item ${currentFolder===f.id?'active':''}" data-folder="${f.id}"><span>${esc(f.name)}</span><span class="count">${articles.filter(a=>a.folderId===f.id&&!a.archived).length||''}</span></button><button class="folder-more" data-folder-more="${f.id}" title="Folder options" aria-label="Folder options"><i data-lucide="ellipsis"></i></button></div>`).join('');
   $$('.folder-item').forEach(b=>b.onclick=()=>{currentFolder=b.dataset.folder;currentView='inbox';renderAll();if(innerWidth<=900){$('#sidebar').classList.remove('open');$('#backdrop').hidden=true}});
   $$('[data-folder-more]').forEach(b=>b.onclick=e=>{e.stopPropagation();openFolderEditor(b.dataset.folder)});
   $$('.folder-row-wrap').forEach(w=>{wireDropTarget(w,w.dataset.folderWrap);wireFolderSortRow(w)});
   wireDropTarget(document.querySelector('.nav-item[data-view="inbox"]'),null);
+  refreshIcons();
 }
 function renderList(){
   const arr=filteredArticles();const title=currentFolder?(folderById(currentFolder)?.name||'Folder'):{inbox:'Inbox',favorites:'Favorites',archive:'Archive'}[currentView];
   $('#viewTitle').textContent=title;$('#viewSubtitle').textContent=`${arr.length} article${arr.length===1?'':'s'}`;
-  $('#articleList').innerHTML=arr.length?arr.map(a=>`<div class="article-row ${a.id===currentId?'active':''}" data-id="${a.id}" draggable="true"><div class="article-drag" title="Drag to a folder" aria-hidden="true">⠿</div><div class="article-row-body"><div class="article-row-title">${a.favorite?'<span class="fav">★</span> ':''}${esc(a.title)}</div><div class="article-row-excerpt">${esc(a.excerpt||'')}</div><div class="article-row-meta"><span>${esc(a.siteName||hostOf(a.url)||'Saved article')}</span><span>·</span><span>${readingMinutes(a)} min</span><span>·</span><span>${formatAge(a.savedAt)}</span></div></div></div>`).join(''):`<div class="empty-reader" style="height:auto;padding-top:60px"><p>No articles here yet.</p></div>`;
+  $('#articleList').innerHTML=arr.length?arr.map(a=>`<div class="article-row ${a.id===currentId?'active':''}" data-id="${a.id}" draggable="true"><div class="article-drag" title="Drag to a folder" aria-hidden="true"><i data-lucide="grip-vertical"></i></div><div class="article-row-body"><div class="article-row-title">${a.favorite?'<span class="fav"><i data-lucide="star"></i></span> ':''}${esc(a.title)}</div><div class="article-row-excerpt">${esc(a.excerpt||'')}</div><div class="article-row-meta"><span>${esc(a.siteName||hostOf(a.url)||'Saved article')}</span><span>·</span><span>${readingMinutes(a)} min</span><span>·</span><span>${formatAge(a.savedAt)}</span></div></div></div>`).join(''):`<div class="empty-reader" style="height:auto;padding-top:60px"><p>No articles here yet.</p></div>`;
+  refreshIcons();
   $$('.article-row').forEach(r=>{
     r.onclick=()=>openArticle(r.dataset.id);
     r.addEventListener('dragstart',e=>{draggedFolderId=null;draggedArticleId=r.dataset.id;r.classList.add('dragging');if(e.dataTransfer){e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/x-reader-article',draggedArticleId);e.dataTransfer.setData('text/plain',draggedArticleId)}});
@@ -329,17 +343,17 @@ async function openArticle(id){
   $('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');
   $('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';
   $('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;
-  $('#favoriteBtn').textContent=a.favorite?'★':'☆';
-  $('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#originalBtn').disabled=!a.url;
+  $('#favoriteBtn').classList.toggle('is-favorite',!!a.favorite);$('#favoriteBtn').title=a.favorite?'Remove favorite':'Favorite';$('#favoriteBtn').setAttribute('aria-label',$('#favoriteBtn').title);
+  $('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#archiveBtn').setAttribute('aria-label',$('#archiveBtn').title);$('#archiveBtn').innerHTML=`<i data-lucide="${a.archived?'archive-restore':'archive'}"></i>`;$('#originalBtn').disabled=!a.url;refreshIcons();
   // Scroll view is the canonical rendered article. Paged mode clones this exact
   // body, so the two modes cannot diverge because of separate cleaning passes.
   const shell=articleShell(a);
   $('#scrollArticle').innerHTML=shell;
-  renderList();applySettings();setMode(a.mode||settings.mode,false);
-  requestAnimationFrame(()=>{paginate();restoreProgress(a)});
+  renderList();setMode(a.mode||settings.mode,false,false);
+  requestAnimationFrame(async()=>{await paginate();if(currentId!==id)return;restoreProgress(a);settleCanonicalImages(id).catch(()=>{})});
 }
 function closeMobileArticle(){if(innerWidth<=680)$('#readerPane').classList.remove('mobile-open')}
-function setMode(mode,save=true){const a=currentArticle();mode=mode==='scroll'?'scroll':'paged';$('#scrollReader').hidden=mode!=='scroll';$('#pagedReader').hidden=mode!=='paged';$('#modeBtn').textContent=mode==='paged'?'Paged':'Scroll';if(a&&save){a.mode=mode;a.updatedAt=Date.now();dbPut(a)}if(mode==='paged')requestAnimationFrame(paginate)}
+function setMode(mode,save=true,repaginate=true){const a=currentArticle();mode=mode==='scroll'?'scroll':'paged';$('#scrollReader').hidden=mode!=='scroll';$('#pagedReader').hidden=mode!=='paged';$('#modeBtn').textContent=mode==='paged'?'Paged':'Scroll';if(a&&save){a.mode=mode;a.updatedAt=Date.now();dbPut(a)}if(mode==='paged'&&repaginate)requestAnimationFrame(paginate)}
 function pageHasContent(page){return page && page.childNodes.length>0}
 function makePage(deck){
   const page=document.createElement('article');
@@ -524,8 +538,6 @@ async function paginate(){
   currentPage=Math.max(0,Math.min(pageCount-1,Math.round(savedProgress*Math.max(0,pageCount-1))));
   deck.style.visibility='';deck.classList.remove('repaginating');
   showCurrentPage();
-  // A late-loading image can change page height. Rebuild once it settles.
-  deck.querySelectorAll('img').forEach(img=>{if(!img.complete)img.addEventListener('load',()=>{clearTimeout(img._rp);img._rp=setTimeout(paginate,60)},{once:true})});
 }
 function showCurrentPage(){
   const deck=$('#pageDeck');[...deck.children].forEach((p,i)=>p.classList.toggle('is-active',i===currentPage));updatePageUI();
@@ -541,7 +553,7 @@ function positionPopover(pop,anchor){const r=anchor.getBoundingClientRect();pop.
 function createBookmarklet(){const base=location.href.split('#')[0].split('?')[0];const origin=location.origin;const js=`javascript:(()=>{const R=${JSON.stringify(base)},O=${JSON.stringify(origin)},T=Math.random().toString(36).slice(2)+Date.now().toString(36);let W;const abs=(root)=>{root.querySelectorAll('[src]').forEach(e=>{try{e.src=new URL(e.getAttribute('src'),location.href).href}catch{}});root.querySelectorAll('a[href]').forEach(e=>{try{e.href=new URL(e.getAttribute('href'),location.href).href}catch{}})};const send=(a)=>{W=window.open(R+'#capture='+T,'_blank');const m={type:'reader-capture',token:T,article:{title:a.title||document.title,byline:a.byline||'',siteName:a.siteName||location.hostname,url:location.href,excerpt:a.excerpt||'',content:a.content||'',textContent:a.textContent||''}};let n=0;const i=setInterval(()=>{try{W.postMessage(m,O)}catch{}if(++n>16)clearInterval(i)},350)};const fallback=()=>{const n=(document.querySelector('article')||document.querySelector('main')||document.body).cloneNode(true);n.querySelectorAll('script,style,nav,form,button,aside').forEach(x=>x.remove());abs(n);send({title:document.title,content:n.innerHTML,textContent:n.textContent,siteName:location.hostname})};const run=()=>{try{const d=document.cloneNode(true);abs(d);const a=new Readability(d).parse();a?send(a):fallback()}catch(e){fallback()}};if(window.Readability)return run();const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@mozilla/readability@0.6.0/Readability.js';s.onload=run;s.onerror=fallback;document.documentElement.appendChild(s);setTimeout(()=>{if(!window.Readability&&!W)fallback()},2500)})();`;return js.replace(/\n/g,'')}
 function handleCapture(){const m=location.hash.match(/^#capture=(.+)$/);if(!m)return;const token=m[1];window.addEventListener('message',async e=>{if(!e.data||e.data.type!=='reader-capture'||e.data.token!==token)return;history.replaceState(null,'',location.pathname+location.search);await saveArticle(e.data.article)}, {once:true})}
 
-async function init(){loadLocal();await openDb();articles=await dbAll();const oauth=await handleDropboxOAuth();if(!oauth&&dbx.connected)await syncDropbox();if(!articles.length)await createWelcome();for(let s=13;s<=28;s++)$('#fontSizeSelect').insertAdjacentHTML('beforeend',`<option value="${s}">${s} px</option>`);applySettings();renderAll();handleCapture();wire();updateDropboxUI()}
+async function init(){loadLocal();applySettings();applyLayoutWidths();refreshIcons();await openDb();articles=await dbAll();const oauth=await handleDropboxOAuth();if(!oauth&&dbx.connected)await syncDropbox();if(!articles.length)await createWelcome();for(let s=13;s<=28;s++)$('#fontSizeSelect').insertAdjacentHTML('beforeend',`<option value="${s}">${s} px</option>`);applySettings();renderAll();handleCapture();wire();setupColumnResizers();updateDropboxUI();refreshIcons()}
 async function createWelcome(){const content=`<p>Reader is a small read-it-later app with two reading styles.</p><h2>Try Paged mode</h2><p>Instead of scrolling forever, Paged mode lays the article out in screen-sized columns. Use the Previous and Next controls below, or the left and right arrow keys. Change the typeface, size, spacing, or reading width and Reader recalculates the pages for you.</p><p>This approach is especially pleasant for long essays, tablets, and e-ink-like reading. If you prefer the web’s usual behaviour, switch to Scroll at any time.</p><h2>Save something from the web</h2><p>Open Settings and drag <strong>Save to Reader</strong> to your bookmarks bar. Then visit an article and click the bookmarklet. Reader will attempt to extract the clean article using Mozilla Readability and add it to your Inbox.</p><p>Your saved article text lives locally in your browser in this first version. Reader also tries to cache article images for offline viewing when the source site permits it.</p><h2>A portable direction</h2><p>If you like the core reading experience, the next logical step is Dropbox sync so the same library and reading position can move among your devices. We can also add highlights, notes, tags, and a Send to Notes action without changing the basic reading interface.</p>`;await saveArticle({title:'Welcome to Reader',siteName:'Reader',excerpt:'A quick tour of paged and scrolling reading.',content,textContent:stripHtml(content),savedAt:Date.now()-1000})}
 
 function wire(){
@@ -559,17 +571,17 @@ function wire(){
   if(saveFolderBtn)saveFolderBtn.onclick=saveFolderEditor;
   if(deleteFolderBtn)deleteFolderBtn.onclick=deleteFolder;
   if(folderNameInput)folderNameInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();saveFolderEditor()}});
-  $('#favoriteBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.favorite=!a.favorite;a.updatedAt=Date.now();await dbPut(a);$('#favoriteBtn').textContent=a.favorite?'★':'☆';renderAll()};
-  $('#archiveBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.archived=!a.archived;a.updatedAt=Date.now();await dbPut(a);renderAll();toast(a.archived?'Archived':'Moved to Inbox')};
+  $('#favoriteBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.favorite=!a.favorite;a.updatedAt=Date.now();await dbPut(a);$('#favoriteBtn').classList.toggle('is-favorite',a.favorite);$('#favoriteBtn').title=a.favorite?'Remove favorite':'Favorite';$('#favoriteBtn').setAttribute('aria-label',$('#favoriteBtn').title);renderAll()};
+  $('#archiveBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.archived=!a.archived;a.updatedAt=Date.now();await dbPut(a);$('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#archiveBtn').setAttribute('aria-label',$('#archiveBtn').title);$('#archiveBtn').innerHTML=`<i data-lucide="${a.archived?'archive-restore':'archive'}"></i>`;refreshIcons();renderAll();toast(a.archived?'Archived':'Moved to Inbox')};
   $('#originalBtn').onclick=()=>{const a=currentArticle();if(a?.url)window.open(a.url,'_blank','noopener')};
   $('#modeBtn').onclick=()=>{const mode=$('#pagedReader').hidden?'paged':'scroll';setMode(mode);const a=currentArticle();if(a)a.mode=mode;};
   $('#prevPageBtn').onclick=()=>goPage(-1);$('#nextPageBtn').onclick=()=>goPage(1);
   document.addEventListener('keydown',e=>{if(!$('#pagedReader').hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){if(e.key==='ArrowRight'||e.key==='PageDown'){goPage(1);e.preventDefault()}if(e.key==='ArrowLeft'||e.key==='PageUp'){goPage(-1);e.preventDefault()}}});
-  let touchStart=null,ignoreTapUntil=0;
+  let touchStart=null,pointerStart=null;
   const pageViewport=$('#pageViewport');
   const isInteractiveTapTarget=target=>!!target?.closest?.('a,button,input,select,textarea,label,[role="button"],[contenteditable="true"]');
   const tapToTurnPage=(clientX,target)=>{
-    if($('#pagedReader').hidden||!currentArticle()||Date.now()<ignoreTapUntil||isInteractiveTapTarget(target))return;
+    if($('#pagedReader').hidden||!currentArticle()||isInteractiveTapTarget(target))return;
     const sel=window.getSelection?.();if(sel&&!sel.isCollapsed&&String(sel).trim())return;
     const r=pageViewport.getBoundingClientRect();if(!r.width)return;
     const x=clientX-r.left,ratio=x/r.width;
@@ -581,10 +593,13 @@ function wire(){
     if(!touchStart)return;
     const t=e.changedTouches[0];if(!t){touchStart=null;return}
     const dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;
-    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)){ignoreTapUntil=Date.now()+450;goPage(dx<0?1:-1)}
+    if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy))goPage(dx<0?1:-1);
+    else if(Math.abs(dx)<12&&Math.abs(dy)<12)tapToTurnPage(t.clientX,e.target);
     touchStart=null;
   },{passive:true});
-  pageViewport.addEventListener('click',e=>tapToTurnPage(e.clientX,e.target));
+  pageViewport.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')return;pointerStart={x:e.clientX,y:e.clientY,target:e.target}});
+  pageViewport.addEventListener('pointerup',e=>{if(!pointerStart||e.pointerType==='touch')return;const dx=e.clientX-pointerStart.x,dy=e.clientY-pointerStart.y;if(Math.abs(dx)<7&&Math.abs(dy)<7)tapToTurnPage(e.clientX,e.target);pointerStart=null});
+  pageViewport.addEventListener('pointercancel',()=>{pointerStart=null});
   $('#scrollReader').onscroll=saveScrollProgress;
   $('#appearanceBtn').onclick=e=>positionPopover($('#appearancePopover'),e.currentTarget);$('#moreBtn').onclick=e=>positionPopover($('#morePopover'),e.currentTarget);
   document.addEventListener('pointerdown',e=>{for(const id of ['appearancePopover','morePopover']){const p=document.getElementById(id);if(!p.hidden&&!p.contains(e.target)&&!['appearanceBtn','moreBtn'].includes(e.target.id))p.hidden=true}});
@@ -597,6 +612,7 @@ function wire(){
   $('#mobileMenuBtn').onclick=()=>{$('#sidebar').classList.add('open');$('#backdrop').hidden=false};$('#backdrop').onclick=()=>{$('#sidebar').classList.remove('open');$('#backdrop').hidden=true};$('#mobileBackBtn').onclick=closeMobileArticle;
   window.addEventListener('resize',()=>{
     const w=window.innerWidth,h=window.innerHeight;
+    applyLayoutWidths();
     const widthChanged=Math.abs(w-lastViewportWidth)>6;
     const heightChanged=Math.abs(h-lastViewportHeight)>24;
     lastViewportWidth=w;lastViewportHeight=h;

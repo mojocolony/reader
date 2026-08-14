@@ -75,3 +75,17 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 - Optional Dropbox sync uses OAuth 2 + PKCE and stores the library in `/reader.json` inside the Dropbox App Folder.
 - Dropbox sync includes articles, folders, favorites/archive state, reading progress, and Reader appearance/settings. The app remains local-first.
 - To connect the hosted GitHub Pages build, add its exact URL (for example `https://mojocolony.github.io/reader/`) as an OAuth redirect URI in the Dropbox App Console, then paste the app key in Reader Settings.
+
+
+## Reader v22
+
+- Replaced interface glyphs with Lucide icons and refreshed the Reader app icon in the same visual family as Studio and Notes.
+- Added draggable desktop navigation and article-list column widths; double-click either divider to reset.
+- Added explicit click/tap page turning on the left and right sides of the desktop paged reader while preserving text selection and links.
+- Applies the saved reading theme before the stylesheet paints, eliminating the Light-to-Dark startup flash on devices that already have a saved theme.
+- Removed duplicate pagination on article open and the cloned-image repagination feedback loop that could cause repeated mobile flicker. Late article images now trigger at most one guarded repagination from the canonical article.
+
+
+## Build
+
+- Visible sidebar build number: `Reader v1.22`.

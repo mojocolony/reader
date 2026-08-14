@@ -5,61 +5,71 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f7f5f1">
   <title>Reader</title>
+  <script>
+    (()=>{
+      try{
+        const saved=JSON.parse(localStorage.getItem('reader-settings-v1')||'{}');
+        const theme=['light','sepia','dark','eink'].includes(saved.theme)?saved.theme:'light';
+        document.documentElement.classList.add('theme-'+theme);
+        const colors={light:'#f7f5f1',sepia:'#eee5d5',dark:'#181817',eink:'#ffffff'};
+        document.querySelector('meta[name="theme-color"]')?.setAttribute('content',colors[theme]);
+      }catch{ document.documentElement.classList.add('theme-light'); }
+    })();
+  </script>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="styles.css?v=21">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png?v=22">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=22">
+  <link rel="icon" href="icon.svg?v=22" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=22">
+  <link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
 <div class="app-shell">
   <aside id="sidebar" class="sidebar">
     <div class="brand-row">
       <div><div class="eyebrow">READ LATER</div><div class="brand">Reader</div></div>
-      <button id="settingsBtn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+      <button id="settingsBtn" class="icon-btn" title="Settings" aria-label="Settings"><i data-lucide="settings"></i></button>
     </div>
-    <button id="addBtn" class="primary-btn full">＋ Add article</button>
-    <label class="search-wrap"><span>⌕</span><input id="searchInput" type="search" placeholder="Search articles"></label>
+    <button id="addBtn" class="primary-btn full icon-label-btn"><i data-lucide="plus"></i><span>Add article</span></button>
+    <label class="search-wrap"><span class="search-icon" aria-hidden="true"><i data-lucide="search"></i></span><input id="searchInput" type="search" placeholder="Search articles"></label>
     <nav class="nav-section">
       <button class="nav-item active" data-view="inbox"><span>Inbox</span><span id="inboxCount" class="count"></span></button>
       <button class="nav-item" data-view="favorites"><span>Favorites</span><span id="favoriteCount" class="count"></span></button>
       <button class="nav-item" data-view="archive"><span>Archive</span><span id="archiveCount" class="count"></span></button>
     </nav>
-    <div class="folders-head"><span>Folders</span><div class="folders-head-actions"><select id="folderSortSelect" class="folder-sort-select" aria-label="Sort folders" title="Sort folders"><option value="manual">Manual</option><option value="alpha">A–Z</option></select><button id="newFolderBtn" class="mini-btn" title="New folder">＋</button></div></div>
+    <div class="folders-head"><span>Folders</span><div class="folders-head-actions"><select id="folderSortSelect" class="folder-sort-select" aria-label="Sort folders" title="Sort folders"><option value="manual">Manual</option><option value="alpha">A–Z</option></select><button id="newFolderBtn" class="mini-btn" title="New folder" aria-label="New folder"><i data-lucide="plus"></i></button></div></div>
     <div id="folderList" class="folder-list"></div>
     <div class="sidebar-bottom">
       <button id="exportBtn" class="text-btn">Export backup</button>
       <label class="text-btn file-label">Import backup<input id="importInput" type="file" accept="application/json,.json" hidden></label>
+      <div class="build-number" aria-label="Reader build 22">Reader v1.22</div>
     </div>
   </aside>
+  <div id="sidebarResizer" class="column-resizer sidebar-resizer" role="separator" aria-orientation="vertical" aria-label="Resize navigation column" title="Drag to resize navigation. Double-click to reset."></div>
 
   <section class="article-list-pane">
     <div class="list-head">
-      <button id="mobileMenuBtn" class="icon-btn mobile-only">☰</button>
+      <button id="mobileMenuBtn" class="icon-btn mobile-only" aria-label="Open navigation"><i data-lucide="menu"></i></button>
       <div class="list-head-copy"><div id="viewTitle" class="view-title">Inbox</div><div id="viewSubtitle" class="view-subtitle"></div></div>
       <select id="sortSelect" class="sort-select" aria-label="Sort articles"><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="title">A–Z</option><option value="source">Source</option></select>
     </div>
     <div id="articleList" class="article-list"></div>
   </section>
+  <div id="listResizer" class="column-resizer list-resizer" role="separator" aria-orientation="vertical" aria-label="Resize article list column" title="Drag to resize article list. Double-click to reset."></div>
 
   <main id="readerPane" class="reader-pane">
-    <div id="emptyReader" class="empty-reader"><div class="empty-mark">☷</div><h2>Your reading queue</h2><p>Save an article, then choose it from the list.</p></div>
+    <div id="emptyReader" class="empty-reader"><div class="empty-mark"><i data-lucide="book-open-text"></i></div><h2>Your reading queue</h2><p>Save an article, then choose it from the list.</p></div>
     <div id="readerView" class="reader-view" hidden>
       <header class="reader-topbar">
-        <button id="mobileBackBtn" class="icon-btn mobile-back mobile-only" aria-label="Back to article list">←</button>
+        <button id="mobileBackBtn" class="icon-btn mobile-back mobile-only" aria-label="Back to article list"><i data-lucide="arrow-left"></i></button>
         <div class="reader-meta-compact"><span id="sourceLabel"></span><span id="readingTimeLabel"></span></div>
         <div class="reader-actions">
-          <button id="favoriteBtn" class="icon-btn" title="Favorite">☆</button>
-          <button id="archiveBtn" class="icon-btn" title="Archive" aria-label="Archive">
-            <svg class="archive-action-icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 7.5h16v11.25a1.75 1.75 0 0 1-1.75 1.75H5.75A1.75 1.75 0 0 1 4 18.75V7.5Z"/>
-              <path d="M3 4.25h18v3.25H3z"/>
-              <path d="M9.25 11.25h5.5"/>
-            </svg>
-          </button>
-          <button id="originalBtn" class="icon-btn" title="Open original">↗</button>
+          <button id="favoriteBtn" class="icon-btn" title="Favorite" aria-label="Favorite"><i data-lucide="star"></i></button>
+          <button id="archiveBtn" class="icon-btn" title="Archive" aria-label="Archive"><i data-lucide="archive"></i></button>
+          <button id="originalBtn" class="icon-btn" title="Open original" aria-label="Open original"><i data-lucide="external-link"></i></button>
           <button id="appearanceBtn" class="pill-btn" title="Reading appearance">Aa</button>
           <button id="modeBtn" class="pill-btn" title="Switch reading mode">Paged</button>
-          <button id="moreBtn" class="icon-btn" title="Article options">⋯</button>
+          <button id="moreBtn" class="icon-btn" title="Article options" aria-label="Article options"><i data-lucide="ellipsis"></i></button>
         </div>
       </header>
 
@@ -72,9 +82,9 @@
           <div id="pageDeck" class="page-deck" aria-live="polite"></div>
         </div>
         <footer class="page-footer">
-          <button id="prevPageBtn" class="page-nav">← Previous</button>
+          <button id="prevPageBtn" class="page-nav"><i data-lucide="chevron-left"></i><span>Previous</span></button>
           <div class="page-progress"><span id="pageLabel">Page 1 of 1</span><div class="progress-track"><div id="progressBar" class="progress-bar"></div></div></div>
-          <button id="nextPageBtn" class="page-nav">Next →</button>
+          <button id="nextPageBtn" class="page-nav"><span>Next</span><i data-lucide="chevron-right"></i></button>
         </footer>
       </div>
     </div>
@@ -83,7 +93,7 @@
 <div id="backdrop" class="backdrop" hidden></div>
 
 <dialog id="addDialog" class="modal small-modal">
-  <div class="modal-head"><div><div class="modal-title">Add article</div><div class="modal-subtitle">The bookmarklet gives the best results.</div></div><button class="icon-btn" data-close="addDialog">×</button></div>
+  <div class="modal-head"><div><div class="modal-title">Add article</div><div class="modal-subtitle">The bookmarklet gives the best results.</div></div><button class="icon-btn" data-close="addDialog" aria-label="Close"><i data-lucide="x"></i></button></div>
   <div class="modal-body">
     <div class="tip-card"><strong>Save from the web</strong><p>Install the <b>Save to Reader</b> bookmarklet in Settings, then click it while viewing an article.</p></div>
     <label>Or paste article HTML / text<textarea id="manualContent" rows="9" placeholder="Paste an article here…"></textarea></label>
@@ -99,7 +109,7 @@
       <div id="folderDialogTitle" class="modal-title">New folder</div>
       <div class="modal-subtitle">Organize saved articles.</div>
     </div>
-    <button class="icon-btn" data-close="folderDialog" aria-label="Close">×</button>
+    <button class="icon-btn" data-close="folderDialog" aria-label="Close"><i data-lucide="x"></i></button>
   </div>
   <div class="modal-body">
     <label>Folder name<input id="folderNameInput" type="text" autocomplete="off" placeholder="e.g. Longreads"></label>
@@ -115,7 +125,7 @@
 </dialog>
 
 <dialog id="settingsDialog" class="modal">
-  <div class="modal-head"><div><div class="modal-title">Settings</div><div class="modal-subtitle">Install the clipper and set defaults.</div></div><button class="icon-btn" data-close="settingsDialog">×</button></div>
+  <div class="modal-head"><div><div class="modal-title">Settings</div><div class="modal-subtitle">Install the clipper and set defaults.</div></div><button class="icon-btn" data-close="settingsDialog" aria-label="Close"><i data-lucide="x"></i></button></div>
   <div class="modal-body">
     <section class="settings-section">
       <h3>Save to Reader</h3>
@@ -155,6 +165,7 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.12/dist/purify.min.js"></script>
-<script src="app.js?v=21"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>
