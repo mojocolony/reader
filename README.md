@@ -88,4 +88,11 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.22`.
+- Visible sidebar build number: `Reader v1.23`.
+
+
+## Reader v23
+
+- Desktop paged reading now uses the full outer reading margins as page-turn targets, so the pointer can stay outside the article text.
+- The active edge zones are slightly wider (38% left / 38% right), while the central 24% remains neutral.
+- Footer controls, links, form controls, and text selection remain protected from accidental page turns.

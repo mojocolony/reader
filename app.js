@@ -578,15 +578,15 @@ function wire(){
   $('#prevPageBtn').onclick=()=>goPage(-1);$('#nextPageBtn').onclick=()=>goPage(1);
   document.addEventListener('keydown',e=>{if(!$('#pagedReader').hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){if(e.key==='ArrowRight'||e.key==='PageDown'){goPage(1);e.preventDefault()}if(e.key==='ArrowLeft'||e.key==='PageUp'){goPage(-1);e.preventDefault()}}});
   let touchStart=null,pointerStart=null;
-  const pageViewport=$('#pageViewport');
+  const pageViewport=$('#pageViewport'),pagedReader=$('#pagedReader');
   const isInteractiveTapTarget=target=>!!target?.closest?.('a,button,input,select,textarea,label,[role="button"],[contenteditable="true"]');
   const tapToTurnPage=(clientX,target)=>{
-    if($('#pagedReader').hidden||!currentArticle()||isInteractiveTapTarget(target))return;
+    if(pagedReader.hidden||!currentArticle()||isInteractiveTapTarget(target)||target?.closest?.('.page-footer'))return;
     const sel=window.getSelection?.();if(sel&&!sel.isCollapsed&&String(sel).trim())return;
     const r=pageViewport.getBoundingClientRect();if(!r.width)return;
     const x=clientX-r.left,ratio=x/r.width;
-    if(ratio<=0.35)goPage(-1);
-    else if(ratio>=0.65)goPage(1);
+    if(ratio<=0.38)goPage(-1);
+    else if(ratio>=0.62)goPage(1);
   };
   pageViewport.addEventListener('touchstart',e=>{const t=e.touches[0];touchStart=t?{x:t.clientX,y:t.clientY}:null},{passive:true});
   pageViewport.addEventListener('touchend',e=>{
@@ -597,9 +597,12 @@ function wire(){
     else if(Math.abs(dx)<12&&Math.abs(dy)<12)tapToTurnPage(t.clientX,e.target);
     touchStart=null;
   },{passive:true});
-  pageViewport.addEventListener('pointerdown',e=>{if(e.pointerType==='touch')return;pointerStart={x:e.clientX,y:e.clientY,target:e.target}});
-  pageViewport.addEventListener('pointerup',e=>{if(!pointerStart||e.pointerType==='touch')return;const dx=e.clientX-pointerStart.x,dy=e.clientY-pointerStart.y;if(Math.abs(dx)<7&&Math.abs(dy)<7)tapToTurnPage(e.clientX,e.target);pointerStart=null});
-  pageViewport.addEventListener('pointercancel',()=>{pointerStart=null});
+  // Desktop: listen on the whole reading surface, not just the text-width page.
+  // This makes the outer margins generous page-turn targets while preserving
+  // links, selection, the footer controls, and the quiet centre of the page.
+  pagedReader.addEventListener('pointerdown',e=>{if(e.pointerType==='touch'||e.target?.closest?.('.page-footer'))return;pointerStart={x:e.clientX,y:e.clientY,target:e.target}});
+  pagedReader.addEventListener('pointerup',e=>{if(!pointerStart||e.pointerType==='touch')return;const dx=e.clientX-pointerStart.x,dy=e.clientY-pointerStart.y;if(Math.abs(dx)<7&&Math.abs(dy)<7)tapToTurnPage(e.clientX,e.target);pointerStart=null});
+  pagedReader.addEventListener('pointercancel',()=>{pointerStart=null});
   $('#scrollReader').onscroll=saveScrollProgress;
   $('#appearanceBtn').onclick=e=>positionPopover($('#appearancePopover'),e.currentTarget);$('#moreBtn').onclick=e=>positionPopover($('#morePopover'),e.currentTarget);
   document.addEventListener('pointerdown',e=>{for(const id of ['appearancePopover','morePopover']){const p=document.getElementById(id);if(!p.hidden&&!p.contains(e.target)&&!['appearanceBtn','moreBtn'].includes(e.target.id))p.hidden=true}});

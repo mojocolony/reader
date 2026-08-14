@@ -1,4 +1,4 @@
-const CACHE='reader-v22';
+const CACHE='reader-v23';
 const CORE=['./','./index.html','./styles.css?v=22','./app.js?v=22','./manifest.webmanifest','./icon.svg?v=22','./favicon-32.png?v=22','./apple-touch-icon.png?v=22','./icon-192.png?v=22','./icon-512.png?v=22'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE&&k!=='reader-images-v1').map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
