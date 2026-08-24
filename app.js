@@ -499,6 +499,33 @@ function pageHasOnlyReaderLead(page){
   const children=[...page.children];
   return children.length>0&&children.every(el=>el.classList?.contains('reader-title')||el.classList?.contains('reader-deck'));
 }
+function extractEarlyLeadingMedia(fragment){
+  // Some publishers (notably NYT) wrap the hero image several layers deep.
+  // Waiting for the generic paginator to stumble onto that nested figure is
+  // unreliable, so identify a genuinely early hero before pagination starts.
+  const firstImg=fragment.querySelector('img');
+  if(!firstImg)return null;
+  const target=firstImg.closest('figure')||firstImg.closest('picture')||firstImg;
+  const deck=fragment.querySelector('.reader-deck');
+  try{
+    const range=document.createRange();
+    if(deck)range.setStartAfter(deck);else range.setStart(fragment,0);
+    range.setEndBefore(target);
+    const before=(range.cloneContents().textContent||'').replace(/\s+/g,' ').trim();
+    // Only promote media that really belongs at the front of the story. This
+    // avoids pulling an ordinary in-body image ahead of substantive text.
+    if(before.length>260)return null;
+  }catch{return null}
+  target.remove();
+  // Removing a nested figure can leave empty wrapper divs behind. Prune only
+  // wrappers that contain no text and no meaningful remaining media/content.
+  [...fragment.querySelectorAll('div,section,article,main')].reverse().forEach(el=>{
+    const text=(el.textContent||'').trim();
+    const meaningful=el.querySelector('img,picture,figure,video,iframe,table,pre,ul,ol,p,blockquote,h1,h2,h3,h4,h5,h6');
+    if(!text&&!meaningful)el.remove();
+  });
+  return target;
+}
 function tryLeadingMediaRescue(node,state){
   // Narrow exception for page 1: if a leading image/figure would otherwise be
   // pushed wholesale to page 2, shrink that media just enough to use the open
@@ -598,8 +625,19 @@ async function paginate(){
   const buildPages=(html)=>{
     deck.replaceChildren();
     const template=document.createElement('template');template.innerHTML=html;
+    const leadingMedia=extractEarlyLeadingMedia(template.content);
     const state={deck,page:makePage(deck)};
-    for(const node of [...template.content.childNodes])paginateNode(node,state);
+    let leadingPlaced=false;
+    for(const node of [...template.content.childNodes]){
+      paginateNode(node,state);
+      // articleShell always emits reader-deck immediately before the captured
+      // body. Put the extracted hero here, preserving the intended lead order.
+      if(leadingMedia&&!leadingPlaced&&node.nodeType===Node.ELEMENT_NODE&&node.classList?.contains('reader-deck')){
+        if(!tryLeadingMediaRescue(leadingMedia,state))paginateNode(leadingMedia,state);
+        leadingPlaced=true;
+      }
+    }
+    if(leadingMedia&&!leadingPlaced)paginateNode(leadingMedia,state);
     [...deck.children].forEach(p=>{if(!p.childNodes.length)p.remove()});
     if(!deck.children.length)makePage(deck);
   };
