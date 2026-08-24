@@ -1,4 +1,4 @@
-# Reader v1.26.1
+# Reader v1.26.2
 
 Point release based directly on Reader v1.26.
 
