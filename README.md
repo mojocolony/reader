@@ -1,4 +1,4 @@
-# Reader v1.26.5
+# Reader v1.26.6
 
 Point release based directly on Reader v1.26.
 
@@ -99,7 +99,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.26.5`.
+- Visible sidebar build number: `Reader v1.26.6`.
 
 
 ## Reader v23
@@ -142,3 +142,9 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 ## v1.26.5
 
 - Added **Grey** as a reading colour option using `#e6ecf2`.
+
+
+## v1.26.6
+
+- Fixed the shared Aa appearance popover so long font names no longer force the Font selector outside the panel.
+- All four select controls now stay the same width in Light, Sepia, Grey, Dark, and E-Ink themes.
