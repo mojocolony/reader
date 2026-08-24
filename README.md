@@ -1,4 +1,4 @@
-# Reader v1.26.6
+# Reader v1.26.7
 
 Point release based directly on Reader v1.26.
 
@@ -99,7 +99,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.26.6`.
+- Visible sidebar build number: `Reader v1.26.7`.
 
 
 ## Reader v23
@@ -148,3 +148,8 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 - Fixed the shared Aa appearance popover so long font names no longer force the Font selector outside the panel.
 - All four select controls now stay the same width in Light, Sepia, Grey, Dark, and E-Ink themes.
+
+## v1.26.7
+
+- In Paged mode only, a large leading image or figure that would leave page 1 nearly blank can now be scaled down just enough to fit beneath Reader's title/deck.
+- The exception applies only to the first page and only to leading media; later images, scrolling mode, extraction, sync, and text pagination are unchanged.

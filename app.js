@@ -495,6 +495,51 @@ function paginateList(el,state){
   }
   if(!list.children.length)list.remove();
 }
+function pageHasOnlyReaderLead(page){
+  const children=[...page.children];
+  return children.length>0&&children.every(el=>el.classList?.contains('reader-title')||el.classList?.contains('reader-deck'));
+}
+function tryLeadingMediaRescue(node,state){
+  // Narrow exception for page 1: if a leading image/figure would otherwise be
+  // pushed wholesale to page 2, shrink that media just enough to use the open
+  // space beneath Reader's title/deck. Later media keeps the normal paginator.
+  if(state.page!==state.deck.firstElementChild||!pageHasOnlyReaderLead(state.page))return false;
+  const tag=node.tagName?.toLowerCase();
+  if(!['img','figure','picture'].includes(tag))return false;
+
+  const pageRect=state.page.getBoundingClientRect(),children=[...state.page.children];
+  const last=children[children.length-1],lastRect=last?.getBoundingClientRect();
+  const remaining=Math.floor(pageRect.bottom-(lastRect?.bottom||pageRect.top)-18);
+  const minMedia=Math.max(150,Math.min(220,Math.floor(pageRect.height*.22)));
+  if(remaining<minMedia)return false;
+
+  const rescued=node.cloneNode(true);
+  rescued.classList?.add('reader-leading-media-rescue');
+  state.page.appendChild(rescued);
+  const img=rescued.matches?.('img')?rescued:rescued.querySelector?.('img');
+  if(!img){rescued.remove();return false}
+
+  // Neutralize source-site dimensions only on this paged clone so max-height can
+  // preserve the image's aspect ratio while it shrinks. The canonical/scrolling
+  // article remains untouched.
+  img.style.setProperty('width','auto','important');
+  img.style.setProperty('height','auto','important');
+  img.style.setProperty('max-width','100%','important');
+  img.style.setProperty('object-fit','contain','important');
+  img.style.setProperty('margin-left','auto','important');
+  img.style.setProperty('margin-right','auto','important');
+
+  const natural=Math.max(minMedia,Math.floor(img.getBoundingClientRect().height||remaining));
+  let lo=minMedia,hi=Math.min(natural,remaining),best=0;
+  while(lo<=hi){
+    const mid=Math.floor((lo+hi)/2);
+    img.style.setProperty('max-height',mid+'px','important');
+    if(pageFits(state.page)){best=mid;lo=mid+1}else hi=mid-1;
+  }
+  if(!best){rescued.remove();return false}
+  img.style.setProperty('max-height',best+'px','important');
+  return pageFits(state.page);
+}
 function paginateNode(node,state){
   if(node.nodeType===Node.TEXT_NODE){
     if(!node.textContent.trim())return;
@@ -520,6 +565,10 @@ function paginateNode(node,state){
   if(['p','blockquote','li','h1','h2','h3','h4','h5','h6'].includes(tag)){
     paginateTextBlock(node,state);return;
   }
+
+  // Page 1 special case: rescue a leading image/figure into the substantial
+  // space below the title/deck rather than creating a nearly blank first page.
+  if(tryLeadingMediaRescue(node,state))return;
 
   // Truly indivisible blocks (images, figures, preformatted content, etc.) can
   // move to a fresh page. If even a fresh page cannot contain one, constrain it

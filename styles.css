@@ -179,3 +179,6 @@ body.resizing-columns,body.resizing-columns *{cursor:col-resize!important;user-s
 /* Reader v1.26.5: Grey reading theme (#e6ecf2). */
 
 /* Reader v1.26.6: keep all Aa popover controls contained across every page theme. */
+
+/* Reader v1.26.7: page-1 leading-media rescue is scoped to paged clones only. */
+.reader-page .reader-leading-media-rescue{break-inside:avoid}
