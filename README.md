@@ -1,4 +1,4 @@
-# Reader v1.26.4
+# Reader v1.26.5
 
 Point release based directly on Reader v1.26.
 
@@ -99,7 +99,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.26`.
+- Visible sidebar build number: `Reader v1.26.5`.
 
 
 ## Reader v23
@@ -137,3 +137,8 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 - Added an **All Articles** view showing every non-archived article regardless of folder.
 - All Articles opens sorted by **Newest**.
 - The list shows a subtle folder (or Inbox) label so you can see where each article is filed.
+
+
+## v1.26.5
+
+- Added **Grey** as a reading colour option using `#e6ecf2`.
