@@ -1,4 +1,4 @@
-# Reader v1.26.9
+# Reader v1.26.10
 
 Point release based directly on Reader v1.26.
 
@@ -99,7 +99,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.26.9`.
+- Visible sidebar build number: `Reader v1.26.10`.
 
 
 ## Reader v23
@@ -159,6 +159,11 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 - Stabilized the page-1 leading-image rescue so the image keeps a deterministic reserved height before it finishes loading.
 - This prevents the later image-settle pagination pass from briefly showing the image and then reflowing it away.
 - No changes to scrolling mode, later-page media, extraction, sync, themes, or text pagination.
+
+## v1.26.10
+
+- Aligns the article-list header and reading-pane header to the same 68 px top bar height so their divider lines and controls share one horizontal band.
+- No changes to reading, pagination, sync, themes, folders, or article data.
 
 ## v1.26.9
 - Reworked page-1 hero handling in Paged mode. Reader now detects an early nested hero image/figure before pagination, promotes it immediately after the Reader title/deck, constrains it to the available first-page space, and removes the original node to prevent duplication.
