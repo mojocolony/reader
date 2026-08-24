@@ -88,7 +88,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.23`.
+- Visible sidebar build number: `Reader v1.26`.
 
 
 ## Reader v23
@@ -96,3 +96,27 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 - Desktop paged reading now uses the full outer reading margins as page-turn targets, so the pointer can stay outside the article text.
 - The active edge zones are slightly wider (38% left / 38% right), while the central 24% remains neutral.
 - Footer controls, links, form controls, and text selection remain protected from accidental page turns.
+
+
+## Reader v24
+
+- Fixed the iPad Back button. At the tablet breakpoint it now returns to a full-width article list instead of calling the phone-only close behavior.
+- Added a Lucide full-screen reading button to the article toolbar on tablet and desktop. It hides navigation and the article list so the article uses the full Reader window.
+- The same button exits full-screen reading; Escape also exits it on desktop.
+- On phones, Reader already uses the full app window for an open article, so the extra full-screen button stays hidden.
+
+
+## Reader v25
+
+- iPad reading-width choices now use more distinct measures: Narrow 520 px, Medium 620 px, Wide 820 px. Existing 600/700 px settings migrate automatically.
+- Added a dedicated Lucide hide/show article-list control beside the Back arrow on iPad. Hiding the list expands the article to the full Reader window.
+- The desktop full-screen reading control remains in the right toolbar; on iPad the new panel control occupies the less crowded left side of the reader toolbar.
+- Updated the PWA cache to v25 so the new interface is not masked by an older cached build.
+
+
+## Reader v26
+
+- Added reading-font choices: Lora, Playfair Display, Literata, Bookerly, Cormorant Garamond, Crimson Text, Lancelot, and Lyon.
+- Lora, Playfair Display, Literata, Cormorant Garamond, Crimson Text, and Lancelot are loaded as web fonts.
+- Bookerly and Lyon use local installed/licensed copies when available and otherwise fall back to a book-oriented serif stack; no proprietary font files are bundled.
+- Updated the PWA cache to v26.

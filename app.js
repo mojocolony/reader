@@ -5,7 +5,7 @@ const META_KEY='reader-meta-v1', SETTINGS_KEY='reader-settings-v1', DELETED_KEY=
 const DROPBOX_KEY='reader.dropbox.v1', DROPBOX_PKCE_KEY='reader.dropbox.pkce.v1', DROPBOX_FILE='/reader.json', DROPBOX_SYNC_DELAY=1400;
 const LAYOUT_KEY='reader-layout-widths-v1', LAYOUT_DEFAULTS={sidebar:230,list:310}, LAYOUT_LIMITS={sidebarMin:180,sidebarMax:380,listMin:240,listMax:520,readerMin:420};
 let db, articles=[], meta={folders:[],folderSort:'manual'}, currentView='inbox', currentFolder=null, currentId=null, currentPage=0, pageCount=1, paginateSeq=0, resizeTimer, toastTimer, folderEditorId=null, draggedArticleId=null, draggedFolderId=null, lastViewportWidth=window.innerWidth, lastViewportHeight=window.innerHeight;
-let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:700,theme:'light'};
+let settings={mode:'paged',font:'Georgia,serif',size:19,line:1.65,width:620,theme:'light'};
 let deletedArticles={}, dbx=loadDropboxState(), dropboxSyncTimer=null, dropboxSyncing=false, dropboxSyncAgain=false, suppressDropboxSync=false;
 let layoutWidths=loadLayoutWidths(), imageSettleSeq=0;
 
@@ -14,7 +14,10 @@ function repairSettings(){
   const size=Number(settings.size), line=Number(settings.line), width=Number(settings.width);
   if(!Number.isFinite(size)||size<13||size>28){settings.size=19;changed=true}else settings.size=size;
   if(!Number.isFinite(line)||line<1.2||line>2.2){settings.line=1.65;changed=true}else settings.line=line;
-  if(!Number.isFinite(width)||width<500||width>1000){settings.width=700;changed=true}else settings.width=width;
+  if(width===600){settings.width=520;changed=true}
+  else if(width===700){settings.width=620;changed=true}
+  else if(!Number.isFinite(width)||width<500||width>1000){settings.width=620;changed=true}
+  else settings.width=width;
   if(!['paged','scroll'].includes(settings.mode)){settings.mode='paged';changed=true}
   if(!['light','sepia','dark','eink'].includes(settings.theme)){settings.theme='light';changed=true}
   return changed;
@@ -340,6 +343,7 @@ function articleShell(a,forceText=false){return `<h1 class="reader-title">${esc(
 async function openArticle(id){
   const a=articles.find(x=>x.id===id);if(!a)return;
   currentId=id;currentPage=0;
+  document.querySelector('.app-shell')?.classList.remove('tablet-list-only');
   $('#emptyReader').hidden=true;$('#readerView').hidden=false;$('#readerPane').classList.add('mobile-open');
   $('#sourceLabel').textContent=a.siteName||hostOf(a.url)||'Saved article';
   $('#readingTimeLabel').textContent=`${readingMinutes(a)} min read`;
@@ -352,7 +356,23 @@ async function openArticle(id){
   renderList();setMode(a.mode||settings.mode,false,false);
   requestAnimationFrame(async()=>{await paginate();if(currentId!==id)return;restoreProgress(a);settleCanonicalImages(id).catch(()=>{})});
 }
-function closeMobileArticle(){if(innerWidth<=680)$('#readerPane').classList.remove('mobile-open')}
+function setReaderFocus(on){
+  const shell=document.querySelector('.app-shell'),btn=$('#fullscreenBtn'),panelBtn=$('#tabletPanelBtn');
+  if(!shell)return;
+  shell.classList.toggle('reader-focus',!!on);
+  const active=shell.classList.contains('reader-focus');
+  if(btn){btn.innerHTML=`<i data-lucide="${active?'minimize-2':'maximize-2'}"></i>`;btn.title=active?'Exit full-screen reading':'Full-screen reading';btn.setAttribute('aria-label',btn.title);btn.setAttribute('aria-pressed',String(active))}
+  if(panelBtn){panelBtn.innerHTML=`<i data-lucide="${active?'panel-left-open':'panel-left-close'}"></i>`;panelBtn.title=active?'Show article list':'Hide article list';panelBtn.setAttribute('aria-label',panelBtn.title);panelBtn.setAttribute('aria-pressed',String(active))}
+  refreshIcons();
+  clearTimeout(resizeTimer);resizeTimer=setTimeout(paginate,80);
+}
+function toggleReaderFocus(){const shell=document.querySelector('.app-shell');if(shell)setReaderFocus(!shell.classList.contains('reader-focus'))}
+function closeMobileArticle(){
+  setReaderFocus(false);
+  const shell=document.querySelector('.app-shell');
+  if(innerWidth<=680){$('#readerPane').classList.remove('mobile-open');return}
+  if(innerWidth<=900&&shell){shell.classList.add('tablet-list-only');requestAnimationFrame(()=>$('#articleList')?.focus?.())}
+}
 function setMode(mode,save=true,repaginate=true){const a=currentArticle();mode=mode==='scroll'?'scroll':'paged';$('#scrollReader').hidden=mode!=='scroll';$('#pagedReader').hidden=mode!=='paged';$('#modeBtn').textContent=mode==='paged'?'Paged':'Scroll';if(a&&save){a.mode=mode;a.updatedAt=Date.now();dbPut(a)}if(mode==='paged'&&repaginate)requestAnimationFrame(paginate)}
 function pageHasContent(page){return page && page.childNodes.length>0}
 function makePage(deck){
@@ -574,9 +594,14 @@ function wire(){
   $('#favoriteBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.favorite=!a.favorite;a.updatedAt=Date.now();await dbPut(a);$('#favoriteBtn').classList.toggle('is-favorite',a.favorite);$('#favoriteBtn').title=a.favorite?'Remove favorite':'Favorite';$('#favoriteBtn').setAttribute('aria-label',$('#favoriteBtn').title);renderAll()};
   $('#archiveBtn').onclick=async()=>{const a=currentArticle();if(!a)return;a.archived=!a.archived;a.updatedAt=Date.now();await dbPut(a);$('#archiveBtn').title=a.archived?'Move to Inbox':'Archive';$('#archiveBtn').setAttribute('aria-label',$('#archiveBtn').title);$('#archiveBtn').innerHTML=`<i data-lucide="${a.archived?'archive-restore':'archive'}"></i>`;refreshIcons();renderAll();toast(a.archived?'Archived':'Moved to Inbox')};
   $('#originalBtn').onclick=()=>{const a=currentArticle();if(a?.url)window.open(a.url,'_blank','noopener')};
+  $('#fullscreenBtn').onclick=toggleReaderFocus;
+  const tabletPanelBtn=$('#tabletPanelBtn');if(tabletPanelBtn)tabletPanelBtn.onclick=toggleReaderFocus;
   $('#modeBtn').onclick=()=>{const mode=$('#pagedReader').hidden?'paged':'scroll';setMode(mode);const a=currentArticle();if(a)a.mode=mode;};
   $('#prevPageBtn').onclick=()=>goPage(-1);$('#nextPageBtn').onclick=()=>goPage(1);
-  document.addEventListener('keydown',e=>{if(!$('#pagedReader').hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){if(e.key==='ArrowRight'||e.key==='PageDown'){goPage(1);e.preventDefault()}if(e.key==='ArrowLeft'||e.key==='PageUp'){goPage(-1);e.preventDefault()}}});
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&document.querySelector('.app-shell')?.classList.contains('reader-focus')){setReaderFocus(false);e.preventDefault();return}
+    if(!$('#pagedReader').hidden&&!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)){if(e.key==='ArrowRight'||e.key==='PageDown'){goPage(1);e.preventDefault()}if(e.key==='ArrowLeft'||e.key==='PageUp'){goPage(-1);e.preventDefault()}}
+  });
   let touchStart=null,pointerStart=null;
   const pageViewport=$('#pageViewport'),pagedReader=$('#pagedReader');
   const isInteractiveTapTarget=target=>!!target?.closest?.('a,button,input,select,textarea,label,[role="button"],[contenteditable="true"]');
@@ -614,7 +639,8 @@ function wire(){
   $('#importInput').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const j=JSON.parse(await f.text());if(!Array.isArray(j.articles))throw 0;if(confirm(`Import ${j.articles.length} articles? Existing articles with the same IDs will be replaced.`)){for(const a of j.articles){if(a?.id)delete deletedArticles[a.id];await dbPut(a)}saveDeleted();if(j.meta){meta=j.meta;saveMeta()}if(j.settings){settings={...settings,...j.settings};saveSettings()}articles=await dbAll();applySettings();renderAll();toast('Backup imported')}}catch{toast('Could not read backup')}e.target.value=''};
   $('#mobileMenuBtn').onclick=()=>{$('#sidebar').classList.add('open');$('#backdrop').hidden=false};$('#backdrop').onclick=()=>{$('#sidebar').classList.remove('open');$('#backdrop').hidden=true};$('#mobileBackBtn').onclick=closeMobileArticle;
   window.addEventListener('resize',()=>{
-    const w=window.innerWidth,h=window.innerHeight;
+    const w=window.innerWidth,h=window.innerHeight,shell=document.querySelector('.app-shell');
+    if(shell&&(w>900||w<=680))shell.classList.remove('tablet-list-only');
     applyLayoutWidths();
     const widthChanged=Math.abs(w-lastViewportWidth)>6;
     const heightChanged=Math.abs(h-lastViewportHeight)>24;
