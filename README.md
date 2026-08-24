@@ -1,4 +1,4 @@
-# Reader v1.26.10
+# Reader v1.26.11
 
 Point release based directly on Reader v1.26.
 
@@ -99,7 +99,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.26.10`.
+- Visible sidebar build number: `Reader v1.26.11`.
 
 
 ## Reader v23
@@ -160,7 +160,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 - This prevents the later image-settle pagination pass from briefly showing the image and then reflowing it away.
 - No changes to scrolling mode, later-page media, extraction, sync, themes, or text pagination.
 
-## v1.26.10
+## v1.26.11
 
 - Aligns the article-list header and reading-pane header to the same 68 px top bar height so their divider lines and controls share one horizontal band.
 - No changes to reading, pagination, sync, themes, folders, or article data.
