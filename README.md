@@ -1,4 +1,4 @@
-# Reader v1.26.3
+# Reader v1.26.4
 
 Point release based directly on Reader v1.26.
 
@@ -131,3 +131,9 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 - Lora, Playfair Display, Literata, Cormorant Garamond, Crimson Text, and Lancelot are loaded as web fonts.
 - Bookerly and Lyon use local installed/licensed copies when available and otherwise fall back to a book-oriented serif stack; no proprietary font files are bundled.
 - Updated the PWA cache to v26.
+
+
+## v1.26.4
+- Added an **All Articles** view showing every non-archived article regardless of folder.
+- All Articles opens sorted by **Newest**.
+- The list shows a subtle folder (or Inbox) label so you can see where each article is filed.

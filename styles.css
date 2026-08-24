@@ -170,3 +170,7 @@ body.resizing-columns,body.resizing-columns *{cursor:col-resize!important;user-s
   background:var(--accent-soft)!important;
   box-shadow:inset 0 0 0 2px var(--accent),0 0 0 1px color-mix(in srgb,var(--accent) 18%,transparent);
 }
+
+
+/* Reader v1.26.4: All Articles view folder provenance. */
+.article-folder-label{font-weight:650;color:var(--text);opacity:.72}
