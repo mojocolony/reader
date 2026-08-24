@@ -1,3 +1,12 @@
+# Reader v1.26.1
+
+Point release based directly on Reader v1.26.
+
+Changes in this point release:
+- Render the local IndexedDB library before Dropbox startup sync, so network sync no longer delays the visible app.
+- Keep the v1.26 sidebar structure intact. Only the folder list scrolls; Export backup, Import backup, and the build number remain anchored at the bottom.
+- No splash/hydration overlay was added.
+
 # Reader
 
 A personal read-it-later web app with both paged and scrolling reading modes.
