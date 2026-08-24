@@ -1,10 +1,12 @@
-# Reader v1.26.2
+# Reader v1.26.3
 
 Point release based directly on Reader v1.26.
 
-Changes in this point release:
+Changes in the v1.26 point-release line:
 - Render the local IndexedDB library before Dropbox startup sync, so network sync no longer delays the visible app.
-- Keep the v1.26 sidebar structure intact. Only the folder list scrolls; Export backup, Import backup, and the build number remain anchored at the bottom.
+- Keep the app grid constrained to the viewport so the sidebar footer stays visible regardless of article count.
+- Use a compact one-line article drag preview so folder names remain visible while dragging.
+- Highlight the current folder drop target more clearly.
 - No splash/hydration overlay was added.
 
 # Reader

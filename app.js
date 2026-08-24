@@ -256,7 +256,21 @@ function renderList(){
   refreshIcons();
   $$('.article-row').forEach(r=>{
     r.onclick=()=>openArticle(r.dataset.id);
-    r.addEventListener('dragstart',e=>{draggedFolderId=null;draggedArticleId=r.dataset.id;r.classList.add('dragging');if(e.dataTransfer){e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/x-reader-article',draggedArticleId);e.dataTransfer.setData('text/plain',draggedArticleId)}});
+    r.addEventListener('dragstart',e=>{
+      draggedFolderId=null;draggedArticleId=r.dataset.id;r.classList.add('dragging');
+      if(e.dataTransfer){
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/x-reader-article',draggedArticleId);
+        e.dataTransfer.setData('text/plain',draggedArticleId);
+        const article=articles.find(a=>a.id===draggedArticleId);
+        const preview=document.createElement('div');
+        preview.className='article-drag-preview';
+        preview.innerHTML=`<span class="article-drag-preview-grip" aria-hidden="true">⋮⋮</span><span class="article-drag-preview-title">${esc(article?.title||'Article')}</span>`;
+        document.body.appendChild(preview);
+        e.dataTransfer.setDragImage(preview,0,0);
+        requestAnimationFrame(()=>preview.remove());
+      }
+    });
     r.addEventListener('dragend',()=>{draggedArticleId=null;r.classList.remove('dragging');$$('.article-drop-target').forEach(x=>x.classList.remove('article-drop-target'))});
   });
 }
