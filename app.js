@@ -519,24 +519,27 @@ function tryLeadingMediaRescue(node,state){
   const img=rescued.matches?.('img')?rescued:rescued.querySelector?.('img');
   if(!img){rescued.remove();return false}
 
-  // Neutralize source-site dimensions only on this paged clone so max-height can
-  // preserve the image's aspect ratio while it shrinks. The canonical/scrolling
-  // article remains untouched.
-  img.style.setProperty('width','auto','important');
-  img.style.setProperty('height','auto','important');
+  // Reserve a deterministic box height before the image finishes loading.
+  // v1.26.7 used max-height against an image whose intrinsic dimensions could
+  // still be unknown; the later image-settle pagination pass could therefore
+  // produce a different layout and make the rescued image disappear. Keeping
+  // an explicit height makes the page-1 fit stable across both passes.
+  img.style.setProperty('width','100%','important');
   img.style.setProperty('max-width','100%','important');
   img.style.setProperty('object-fit','contain','important');
+  img.style.setProperty('object-position','center','important');
   img.style.setProperty('margin-left','auto','important');
   img.style.setProperty('margin-right','auto','important');
 
-  const natural=Math.max(minMedia,Math.floor(img.getBoundingClientRect().height||remaining));
-  let lo=minMedia,hi=Math.min(natural,remaining),best=0;
+  let lo=minMedia,hi=remaining,best=0;
   while(lo<=hi){
     const mid=Math.floor((lo+hi)/2);
+    img.style.setProperty('height',mid+'px','important');
     img.style.setProperty('max-height',mid+'px','important');
     if(pageFits(state.page)){best=mid;lo=mid+1}else hi=mid-1;
   }
   if(!best){rescued.remove();return false}
+  img.style.setProperty('height',best+'px','important');
   img.style.setProperty('max-height',best+'px','important');
   return pageFits(state.page);
 }

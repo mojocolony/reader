@@ -1,4 +1,4 @@
-# Reader v1.26.7
+# Reader v1.26.8
 
 Point release based directly on Reader v1.26.
 
@@ -99,7 +99,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.26.7`.
+- Visible sidebar build number: `Reader v1.26.8`.
 
 
 ## Reader v23
@@ -153,3 +153,9 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 - In Paged mode only, a large leading image or figure that would leave page 1 nearly blank can now be scaled down just enough to fit beneath Reader's title/deck.
 - The exception applies only to the first page and only to leading media; later images, scrolling mode, extraction, sync, and text pagination are unchanged.
+
+## v1.26.8
+
+- Stabilized the page-1 leading-image rescue so the image keeps a deterministic reserved height before it finishes loading.
+- This prevents the later image-settle pagination pass from briefly showing the image and then reflowing it away.
+- No changes to scrolling mode, later-page media, extraction, sync, themes, or text pagination.
