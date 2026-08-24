@@ -573,25 +573,7 @@ function positionPopover(pop,anchor){const r=anchor.getBoundingClientRect();pop.
 function createBookmarklet(){const base=location.href.split('#')[0].split('?')[0];const origin=location.origin;const js=`javascript:(()=>{const R=${JSON.stringify(base)},O=${JSON.stringify(origin)},T=Math.random().toString(36).slice(2)+Date.now().toString(36);let W;const abs=(root)=>{root.querySelectorAll('[src]').forEach(e=>{try{e.src=new URL(e.getAttribute('src'),location.href).href}catch{}});root.querySelectorAll('a[href]').forEach(e=>{try{e.href=new URL(e.getAttribute('href'),location.href).href}catch{}})};const send=(a)=>{W=window.open(R+'#capture='+T,'_blank');const m={type:'reader-capture',token:T,article:{title:a.title||document.title,byline:a.byline||'',siteName:a.siteName||location.hostname,url:location.href,excerpt:a.excerpt||'',content:a.content||'',textContent:a.textContent||''}};let n=0;const i=setInterval(()=>{try{W.postMessage(m,O)}catch{}if(++n>16)clearInterval(i)},350)};const fallback=()=>{const n=(document.querySelector('article')||document.querySelector('main')||document.body).cloneNode(true);n.querySelectorAll('script,style,nav,form,button,aside').forEach(x=>x.remove());abs(n);send({title:document.title,content:n.innerHTML,textContent:n.textContent,siteName:location.hostname})};const run=()=>{try{const d=document.cloneNode(true);abs(d);const a=new Readability(d).parse();a?send(a):fallback()}catch(e){fallback()}};if(window.Readability)return run();const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@mozilla/readability@0.6.0/Readability.js';s.onload=run;s.onerror=fallback;document.documentElement.appendChild(s);setTimeout(()=>{if(!window.Readability&&!W)fallback()},2500)})();`;return js.replace(/\n/g,'')}
 function handleCapture(){const m=location.hash.match(/^#capture=(.+)$/);if(!m)return;const token=m[1];window.addEventListener('message',async e=>{if(!e.data||e.data.type!=='reader-capture'||e.data.token!==token)return;history.replaceState(null,'',location.pathname+location.search);await saveArticle(e.data.article)}, {once:true})}
 
-function revealReader(){document.body.classList.remove('booting');document.body.classList.add('reader-ready');setTimeout(()=>document.querySelector('#readerBoot')?.remove(),200)}
-async function finishStartupSync(){
-  try{
-    const oauth=await handleDropboxOAuth();
-    if(!oauth&&dbx.connected)await syncDropbox();
-    if(!articles.length){await createWelcome();renderAll()}
-    updateDropboxUI();refreshIcons();
-  }catch(e){console.error('Reader background startup sync failed',e);updateDropboxUI(e?.message||'Dropbox sync failed')}
-}
-async function init(){
-  loadLocal();applySettings();applyLayoutWidths();refreshIcons();
-  await openDb();articles=await dbAll();
-  const hasOAuthCode=new URLSearchParams(location.search).has('code');
-  if(!articles.length&&!dbx.connected&&!hasOAuthCode)await createWelcome();
-  for(let s=13;s<=28;s++)$('#fontSizeSelect').insertAdjacentHTML('beforeend',`<option value="${s}">${s} px</option>`);
-  applySettings();renderAll();handleCapture();wire();setupColumnResizers();updateDropboxUI();refreshIcons();
-  revealReader();
-  setTimeout(()=>finishStartupSync(),0);
-}
+async function init(){loadLocal();applySettings();applyLayoutWidths();refreshIcons();await openDb();articles=await dbAll();const oauth=await handleDropboxOAuth();if(!oauth&&dbx.connected)await syncDropbox();if(!articles.length)await createWelcome();for(let s=13;s<=28;s++)$('#fontSizeSelect').insertAdjacentHTML('beforeend',`<option value="${s}">${s} px</option>`);applySettings();renderAll();handleCapture();wire();setupColumnResizers();updateDropboxUI();refreshIcons()}
 async function createWelcome(){const content=`<p>Reader is a small read-it-later app with two reading styles.</p><h2>Try Paged mode</h2><p>Instead of scrolling forever, Paged mode lays the article out in screen-sized columns. Use the Previous and Next controls below, or the left and right arrow keys. Change the typeface, size, spacing, or reading width and Reader recalculates the pages for you.</p><p>This approach is especially pleasant for long essays, tablets, and e-ink-like reading. If you prefer the web’s usual behaviour, switch to Scroll at any time.</p><h2>Save something from the web</h2><p>Open Settings and drag <strong>Save to Reader</strong> to your bookmarks bar. Then visit an article and click the bookmarklet. Reader will attempt to extract the clean article using Mozilla Readability and add it to your Inbox.</p><p>Your saved article text lives locally in your browser in this first version. Reader also tries to cache article images for offline viewing when the source site permits it.</p><h2>A portable direction</h2><p>If you like the core reading experience, the next logical step is Dropbox sync so the same library and reading position can move among your devices. We can also add highlights, notes, tags, and a Send to Notes action without changing the basic reading interface.</p>`;await saveArticle({title:'Welcome to Reader',siteName:'Reader',excerpt:'A quick tour of paged and scrolling reading.',content,textContent:stripHtml(content),savedAt:Date.now()-1000})}
 
 function wire(){

@@ -88,7 +88,7 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 
 ## Build
 
-- Visible sidebar build number: `Reader v1.31`.
+- Visible sidebar build number: `Reader v1.26`.
 
 
 ## Reader v23
@@ -120,10 +120,3 @@ Reader v15: pagination now fills the first page correctly and keeps a bottom saf
 - Lora, Playfair Display, Literata, Cormorant Garamond, Crimson Text, and Lancelot are loaded as web fonts.
 - Bookerly and Lyon use local installed/licensed copies when available and otherwise fall back to a book-oriented serif stack; no proprietary font files are bundled.
 - Updated the PWA cache to v26.
-
-
-## v1.31 rebuild
-
-- Rebuilt from the last clean v1.27 branch rather than the v1.28-v1.30 sidebar branch.
-- The app reveals as soon as local IndexedDB/settings are ready; Dropbox startup sync continues in the background.
-- The original folder rendering is preserved. Only the nav/folder region scrolls, while Export/Import/version stay visible in the sidebar footer.
